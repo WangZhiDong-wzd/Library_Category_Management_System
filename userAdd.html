@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添加用户页面</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="bootstrap-4.6.2-dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/userAdd.css">
+    <!-- jQuery -->
+    <script src="js/jquery-3.7.1.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="bootstrap-4.6.2-dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- 页面标题 -->
+        <h1>添加用户</h1>
+
+        <!--
+            数据流概述（data flow）：
+            1. 用户填写表单 → 点击提交
+            2. getFormData() 从 DOM 读取表单字段值，组装成 data 对象
+            3. validate(data) 对 data 做客户端校验（非空、长度、邮箱格式、角色必选）
+            4. 从 localStorage 读取现有用户数组，执行 duplicate check（用户名唯一）
+            5. generateId() 为新用户分配自增 ID
+            6. 将新用户对象 push 到数组中，通过 localStorage.setItem() 持久化
+            7. window.location.href 跳转回用户列表页（./user.html）
+        -->
+
+        <!-- 添加用户表单 -->
+        <form id="user-form" autocomplete="off">
+            <div class="form-group">
+                <label for="username">用户名:</label>
+                <input type="text" id="username" name="username" placeholder="请输入用户名" required>
+                <span class="error" id="username-error" role="alert"></span>
+            </div>
+
+            <div class="form-group">
+                <label for="password">密码:</label>
+                <input type="password" id="password" name="password" placeholder="请输入密码（至少6位）" required>
+                <span class="error" id="password-error" role="alert"></span>
+            </div>
+
+            <div class="form-group">
+                <label for="email">邮箱:</label>
+                <input type="email" id="email" name="email" placeholder="请输入邮箱地址" required>
+                <span class="error" id="email-error" role="alert"></span>
+            </div>
+
+            <div class="form-group">
+                <label for="role">角色:</label>
+                <select id="role" name="role" required>
+                    <option value="">请选择角色</option>
+                    <option value="管理员">管理员</option>
+                    <option value="普通用户">普通用户</option>
+                </select>
+                <span class="error" id="role-error" role="alert"></span>
+            </div>
+
+            <button type="submit" class="btn btn-primary">提交</button>
+            <button type="button" class="btn btn-secondary" id="btn-back">返回</button>
+        </form>
+    </div>
+
+    <script>
+        $(function () {
+            // =========================================================================
+            // 1. DOM 缓存（caching jQuery selectors）
+            //    将所有需要重复使用的 jQuery 对象缓存为常量，避免每次操作都重新查询 DOM。
+            //    - $form:            表单元素
+            //    - $username:        用户名输入框
+            //    - $password:        密码输入框
+            //    - $email:           邮箱输入框
+            //    - $role:            角色下拉框
+            //    - $btnBack:         返回按钮
+            //    - $errors:          错误提示 span 集合（键名与字段对应，便于集中清空）
+            // =========================================================================
+            const $form     = $('#user-form');
+            const $username = $('#username');
+            const $password = $('#password');
+            const $email    = $('#email');
+            const $role     = $('#role');
+            const $btnBack  = $('#btn-back');
+            const $errors   = {
+                username: $('#username-error'),
+                password: $('#password-error'),
+                email:    $('#email-error'),
+                role:     $('#role-error')
+            };
+
+            // 邮箱正则：要求 @ 前后至少一个非空字符，TLD（顶级域名）部分至少 2 个字符
+            const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+            // =========================================================================
+            // 2. 工具函数：清空所有错误提示
+            //    遍历 $errors 对象，将所有 span 的文本置空。
+            // =========================================================================
+            function clearErrors() {
+                $errors.username.text('');
+                $errors.password.text('');
+                $errors.email.text('');
+                $errors.role.text('');
+            }
+
+            // =========================================================================
+            // 3. 工具函数：从表单读取数据
+            //    收集各输入字段的当前值，trim 后返回纯对象。
+            //    注意：密码在此处以明文读取，详见下方 TODO。
+            // =========================================================================
+            function getFormData() {
+                return {
+                    username: $username.val().trim(),
+                    password: $password.val().trim(),
+                    email:    $email.val().trim(),
+                    role:     $role.val()
+                };
+            }
+
+            // =========================================================================
+            // 4. 表单验证
+            //    规则：
+            //    - 用户名：不能为空
+            //    - 密码：  不能为空且长度 >= 6
+            //    - 邮箱：  不能为空且匹配 EMAIL_REGEX
+            //    - 角色：  必须选择一项
+            //    返回 true（全部通过）或 false（有字段不合法）。
+            // =========================================================================
+            function validate(data) {
+                let isValid = true;
+
+                if (!data.username) {
+                    $errors.username.text('用户名不能为空');
+                    isValid = false;
+                }
+
+                if (!data.password || data.password.length < 6) {
+                    $errors.password.text('密码不能为空且至少6位');
+                    isValid = false;
+                }
+
+                if (!data.email || !EMAIL_REGEX.test(data.email)) {
+                    $errors.email.text('请输入有效的邮箱地址');
+                    isValid = false;
+                }
+
+                if (!data.role) {
+                    $errors.role.text('请选择角色');
+                    isValid = false;
+                }
+
+                return isValid;
+            }
+
+            // =========================================================================
+            // 5. ID 生成
+            //    从现有用户数组中取出最大的 id，在其基础上 +1 作为新用户 ID。
+            //    若数组为空则从 1 开始。
+            // =========================================================================
+            function generateId(users) {
+                if (!users || users.length === 0) {
+                    return 1;
+                }
+                const maxId = Math.max(...users.map(function (u) { return u.id; }));
+                return maxId + 1;
+            }
+
+            // =========================================================================
+            // 6. 表单提交处理（核心流程）
+            //    - 阻止表单默认提交行为
+            //    - 清空上次的错误提示
+            //    - 获取表单数据 → 验证 → 读取 localStorage → 查重 → 写入 → 跳转
+            // =========================================================================
+            $form.on('submit', function (e) {
+                e.preventDefault();
+                clearErrors();
+
+                const data = getFormData();
+
+                // 客户端校验
+                if (!validate(data)) {
+                    return;
+                }
+
+                // =================================================================
+                // TODO: 密码安全警告
+                // 当前密码以明文形式存入 localStorage，这在生产环境中是严重的安全隐患。
+                // 建议改进：
+                //   1. 使用 bcrypt / scrypt / PBKDF2 等算法在前端做哈希；
+                //   2. 更佳方案：密码通过 HTTPS 提交到后端，由服务端加盐哈希后存储；
+                //   3. localStorage 本身不应存储任何敏感凭证。
+                // 实现前端哈希时，可引入 crypto-js 等库，例如：
+                //   const hashedPassword = CryptoJS.SHA256(data.password).toString();
+                // =================================================================
+
+                // 从 localStorage 读取现有用户列表（带异常保护）
+                let users;
+                try {
+                    users = JSON.parse(localStorage.getItem('users') || '[]');
+                } catch (parseErr) {
+                    console.error('读取用户数据失败，将使用空列表。', parseErr);
+                    users = [];
+                }
+
+                // 重复检查：用户名是否已存在
+                const isDuplicate = users.some(function (u) {
+                    return u.username === data.username;
+                });
+                if (isDuplicate) {
+                    $errors.username.text('用户名已存在');
+                    return;
+                }
+
+                // 构造新用户对象并加入列表
+                const newUser = {
+                    id:       generateId(users),
+                    username: data.username,
+                    email:    data.email,
+                    role:     data.role,
+                    // TODO: 哈希后存储 —— 当前直接存明文密码仅供演示，切勿用于生产环境
+                    password: data.password
+                };
+                users.push(newUser);
+
+                // 写回 localStorage（带异常保护）
+                try {
+                    localStorage.setItem('users', JSON.stringify(users));
+                } catch (storageErr) {
+                    console.error('保存用户数据失败。', storageErr);
+                    alert('保存失败，请重试。');
+                    return;
+                }
+
+                // 跳转回用户列表页面
+                window.location.href = './user.html';
+            });
+
+            // =========================================================================
+            // 7. 返回按钮：点击后直接跳转到用户列表页
+            // =========================================================================
+            $btnBack.on('click', function () {
+                window.location.href = './user.html';
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>待处理订单</title>
+    <!-- Bootstrap 4.6.2 核心样式 -->
+    <link rel="stylesheet" href="bootstrap-4.6.2-dist/css/bootstrap.min.css">
+    <!-- 订单模块自定义样式：与订单总览共用同一套 CSS -->
+    <link rel="stylesheet" href="css/order.css">
+    <!-- jQuery 3.7.1 -->
+    <script src="js/jquery-3.7.1.min.js"></script>
+    <!-- Bootstrap Bundle -->
+    <script src="bootstrap-4.6.2-dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- 页面标题 -->
+        <h1 class="page-title">待处理订单</h1>
+
+        <!--
+            统计卡片区域：待处理订单专属统计
+            - 待处理订单：当前所有 status === 'pending' 的订单总数
+            - 今日新增：订单日期（orderDate）为今天的新增待处理订单数
+            - 加急订单：数量 >= 5 的订单数（加急规则见 updateStats 函数注释）
+        -->
+        <div class="stats-row">
+            <div class="stat-card pending">
+                <div class="stat-num" id="stat-pending">0</div>
+                <div class="stat-label">待处理订单</div>
+            </div>
+            <div class="stat-card total">
+                <div class="stat-num" id="stat-today">0</div>
+                <div class="stat-label">今日新增</div>
+            </div>
+            <div class="stat-card shipped">
+                <div class="stat-num" id="stat-urgent">0</div>
+                <div class="stat-label">加急订单</div>
+            </div>
+        </div>
+
+        <!-- 搜索与筛选区域 -->
+        <div class="search-section">
+            <!-- 搜索输入框：支持按订单号、图书名称、用户名搜索待处理订单 -->
+            <input type="text" id="search-input" placeholder="搜索订单号 / 图书名称 / 用户名">
+            <!-- 排序下拉框：按下单时间或总价排序 -->
+            <select id="sort-filter">
+                <option value="date-desc">下单时间 ↓</option>
+                <option value="date-asc">下单时间 ↑</option>
+                <option value="price-desc">总价 ↓</option>
+                <option value="price-asc">总价 ↑</option>
+            </select>
+            <!-- 搜索按钮 -->
+            <button id="search-btn" class="btn btn-primary">搜索</button>
+            <!-- 重置按钮 -->
+            <button id="reset-btn" class="btn btn-secondary">重置</button>
+            <!--
+                一键发货按钮：批量将所有待处理订单标记为已发货
+                注意：此操作为破坏性操作，会将所有 pending 状态订单一次性改为 shipped，
+                触发前有二次确认弹窗，确认后不可撤销。
+            -->
+            <button id="ship-all-btn" class="btn btn-warning">一键发货</button>
+        </div>
+
+        <!-- 待处理订单表格 -->
+        <div class="table-container">
+            <table id="order-table">
+                <thead>
+                    <tr>
+                        <th>订单编号</th>
+                        <th>图书名称</th>
+                        <th>用户名</th>
+                        <th>数量</th>
+                        <th>总价</th>
+                        <th>联系电话</th>
+                        <th>下单时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 待处理订单数据通过 JS 动态渲染 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!--
+        订单详情弹窗
+        - role="dialog"：标识为对话框
+        - aria-modal="true"：告知辅助技术这是一个模态窗口，背景内容不可交互
+        - aria-labelledby：指向弹窗标题元素，供屏幕阅读器朗读标题
+    -->
+    <div id="detail-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="detail-modal-title">
+        <div class="modal-content">
+            <span class="close" id="close-detail" aria-label="关闭">&times;</span>
+            <h3 id="detail-modal-title">订单详情</h3>
+            <div id="detail-content"></div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ===========================
+         * 订单数据结构说明
+         * ===========================
+         * 每一条订单存储在 localStorage 的 'orders' 键中，为 JSON 数组。
+         * 单条订单对象的字段如下：
+         *
+         * {
+         *   id: number,          // 订单唯一标识（自增或时间戳生成）
+         *   orderNo: string,     // 订单编号，如 "ORD20240101120000"
+         *   bookTitle: string,   // 图书名称
+         *   username: string,    // 下单用户名
+         *   quantity: number,    // 订购数量（整数）
+         *   unitPrice: number,   // 图书单价（元）
+         *   totalPrice: number,  // 订单总价（元）= unitPrice * quantity
+         *   phone: string,       // 联系电话
+         *   address: string,     // 收货地址
+         *   orderDate: string,   // 下单时间，格式 "YYYY-MM-DD HH:mm:ss"
+         *   status: string       // 订单状态，取值: 'pending' | 'shipped' | 'completed' | 'cancelled'
+         * }
+         *
+         * 本页面仅处理 status === 'pending' 的订单（即待处理订单）。
+         * ===========================
+         */
+
+        $(function () {
+            // ==================== 缓存 jQuery 选择器 ====================
+            // 将频繁使用的 DOM 查询结果缓存为变量，避免重复执行选择器，
+            // 减少 DOM 遍历开销，提升页面响应性能。
+
+            const $searchInput = $('#search-input');
+            const $sortFilter = $('#sort-filter');
+            const $orderTableTbody = $('#order-table tbody');
+            const $statPending = $('#stat-pending');
+            const $statToday = $('#stat-today');
+            const $statUrgent = $('#stat-urgent');
+            const $detailModal = $('#detail-modal');
+            const $detailContent = $('#detail-content');
+            const $closeDetail = $('#close-detail');
+
+            // ==================== 数据层 ====================
+
+            /**
+             * 从 localStorage 安全读取全部订单数据
+             * 使用 try/catch 防止 JSON 解析异常导致页面崩溃
+             * （例如 localStorage 数据被手动篡改或损坏时）
+             * @returns {Array} 订单数组，读取失败时返回空数组
+             */
+            function loadAllOrders() {
+                try {
+                    return JSON.parse(localStorage.getItem('orders')) || [];
+                } catch (e) {
+                    console.error('读取订单数据失败，localStorage 数据可能已损坏:', e);
+                    return [];
+                }
+            }
+
+            /**
+             * 将订单数据安全写入 localStorage
+             * @param {Array} orders - 要保存的订单数组
+             * @returns {boolean} 写入成功返回 true，失败返回 false
+             */
+            function saveAllOrders(orders) {
+                try {
+                    localStorage.setItem('orders', JSON.stringify(orders));
+                    return true;
+                } catch (e) {
+                    console.error('保存订单数据失败，可能 localStorage 已满:', e);
+                    alert('操作失败：无法保存数据，请检查浏览器存储空间。');
+                    return false;
+                }
+            }
+
+            // 初始化：从 localStorage 加载全部订单，筛选出状态为 pending（待处理）的订单
+            let allOrders = loadAllOrders();
+            let pendingOrders = allOrders.filter(function (o) { return o.status === 'pending'; });
+
+            /**
+             * 从 localStorage 重新加载待处理订单数据
+             * 在订单状态变更后（发货、取消等操作）调用此函数，
+             * 确保页面数据与 localStorage 保持同步。
+             * 加载过程包含 try/catch 保护，防止数据损坏导致页面不可用。
+             */
+            function reloadPendingOrders() {
+                allOrders = loadAllOrders();
+                pendingOrders = allOrders.filter(function (o) { return o.status === 'pending'; });
+            }
+
+            // ==================== 渲染函数 ====================
+
+            /**
+             * 更新统计卡片数值
+             *
+             * 统计逻辑说明：
+             * 1. 待处理订单总数：pendingOrders 数组的长度，即所有 status === 'pending' 的订单
+             * 2. 今日新增：遍历 pendingOrders，筛选出 orderDate 前缀等于今天日期（YYYY-MM-DD）的订单
+             *    例如今天 2026-06-02，则 orderDate 以 "2026-06-02" 开头的即为今日新增
+             * 3. 加急订单：数量（quantity）>= 5 视为加急订单
+             *    【业务规则】加急阈值 = 5：订购数量达到 5 本及以上的订单视为加急，
+             *    此阈值基于仓库出货效率设定——大批量订单需要优先备货和打包，
+             *    可根据实际运营情况调整该阈值。
+             */
+            function updateStats() {
+                const pendingCount = pendingOrders.length;
+
+                // 计算今日新增：订单日期为今天的订单
+                // 取当前日期字符串 YYYY-MM-DD，与 orderDate 前缀匹配
+                const today = new Date().toISOString().split('T')[0]; // 格式：YYYY-MM-DD
+                const todayCount = pendingOrders.filter(function (o) {
+                    return o.orderDate && o.orderDate.indexOf(today) === 0;
+                }).length;
+
+                // 计算加急订单：业务规则为 quantity >= 5
+                const urgentCount = pendingOrders.filter(function (o) {
+                    return o.quantity >= 5;
+                }).length;
+
+                $statPending.text(pendingCount);
+                $statToday.text(todayCount);
+                $statUrgent.text(urgentCount);
+            }
+
+            /**
+             * 根据订单状态返回对应的中文文本
+             * 用于订单详情弹窗和表格中的状态展示
+             * @param {string} status - 订单状态英文标识
+             * @returns {string} 中文状态文本
+             */
+            function getStatusText(status) {
+                const map = {
+                    'pending': '待处理',
+                    'shipped': '已发货',
+                    'completed': '已完成',
+                    'cancelled': '已取消'
+                };
+                return map[status] || status;
+            }
+
+            /**
+             * 根据订单状态返回对应的 CSS 类名
+             * 不同状态使用不同颜色标识，提升视觉区分度
+             * @param {string} status - 订单状态英文标识
+             * @returns {string} CSS 类名
+             */
+            function getStatusClass(status) {
+                const map = {
+                    'pending': 'status-pending',
+                    'shipped': 'status-shipped',
+                    'completed': 'status-completed',
+                    'cancelled': 'status-cancelled'
+                };
+                return map[status] || '';
+            }
+
+            /**
+             * 渲染待处理订单表格
+             *
+             * 渲染流程：
+             * 1. 清空表格 tbody（使用缓存的 $orderTableTbody 选择器）
+             * 2. 若订单列表为空，显示"所有订单已处理完毕"的空状态提示
+             * 3. 遍历订单列表，逐行构建 <tr>，每行包含：订单编号、图书名称、
+             *    用户名、数量、总价（格式化到小数点后两位）、联系电话、下单时间、操作按钮
+             *
+             * 安全说明：
+             * - 所有用户数据（orderNo, bookTitle, username 等）通过 jQuery 的 .text() 方法插入，
+             *   自动进行 HTML 转义，防止 XSS 攻击
+             * - 操作按钮通过 jQuery DOM API 创建，使用 .attr() 设置 data-id，
+             *   避免字符串拼接 HTML，杜绝注入风险
+             *
+             * @param {Array} orderList - 需要渲染的订单数组
+             */
+            function renderOrders(orderList) {
+                $orderTableTbody.empty();
+
+                // 无待处理订单时显示空状态提示
+                if (orderList.length === 0) {
+                    const $emptyRow = $('<tr>');
+                    const $emptyCell = $('<td>').attr('colspan', '8')
+                        .css({ textAlign: 'center', color: '#27ae60', padding: '30px', fontSize: '16px' })
+                        .text('所有订单已处理完毕');
+                    $emptyRow.append($emptyCell);
+                    $orderTableTbody.append($emptyRow);
+                    return;
+                }
+
+                // 逐行构建表格，使用 jQuery DOM API 避免 XSS
+                orderList.forEach(function (order) {
+                    const $row = $('<tr>');
+
+                    // 使用 .text() 设置文本内容，jQuery 会自动转义 HTML 特殊字符，
+                    // 即使订单数据中包含 <script> 等恶意标签也不会被执行
+                    $row.append($('<td>').text(order.orderNo));
+                    $row.append($('<td>').text(order.bookTitle));
+                    $row.append($('<td>').text(order.username));
+                    $row.append($('<td>').text(order.quantity));
+                    $row.append($('<td>').text('¥' + parseFloat(order.totalPrice).toFixed(2)));
+                    $row.append($('<td>').text(order.phone || '无'));
+                    $row.append($('<td>').text(order.orderDate));
+
+                    // 操作按钮：使用 jQuery DOM 创建，通过 .attr() 设置 data-id
+                    // 避免使用字符串拼接 .html() 造成 XSS 风险
+                    const $actionTd = $('<td>');
+                    $actionTd.append(
+                        $('<button>')
+                            .addClass('btn btn-info btn-detail')
+                            .attr('data-id', order.id)
+                            .text('详情'),
+                        $('<button>')
+                            .addClass('btn btn-success btn-ship')
+                            .attr('data-id', order.id)
+                            .text('发货'),
+                        $('<button>')
+                            .addClass('btn btn-danger btn-cancel')
+                            .attr('data-id', order.id)
+                            .text('取消')
+                    );
+                    $row.append($actionTd);
+
+                    $orderTableTbody.append($row);
+                });
+            }
+
+            /**
+             * 刷新整个页面：重新加载数据、渲染表格、更新统计
+             * 这是所有状态变更操作（发货、取消）后的统一刷新入口，
+             * 保证数据层和视图层的一致性。
+             */
+            function refreshPage() {
+                reloadPendingOrders();
+                renderOrders(pendingOrders);
+                updateStats();
+            }
+
+            // ==================== 搜索与排序逻辑 ====================
+
+            /**
+             * 执行搜索和排序的组合过滤
+             *
+             * 处理流程：
+             * 第一步（关键词过滤）：
+             *   - 从搜索框获取用户输入的关键词，转为小写并去除首尾空格
+             *   - 在 pendingOrders 中筛选出匹配的订单
+             *   - 匹配字段：订单编号（orderNo）、图书名称（bookTitle）、用户名（username）
+             *   - 若关键词为空字符串，则返回全部订单（不过滤）
+             *
+             * 第二步（排序）：
+             *   - 根据排序下拉框的当前值对过滤结果排序
+             *   - date-desc: 按下单时间倒序，最新订单在前
+             *   - date-asc:  按下单时间正序，最早订单在前
+             *   - price-desc: 按总价倒序，金额高的在前
+             *   - price-asc:  按总价正序，金额低的在前
+             *   - 排序使用 Array.prototype.sort()，直接修改 filtered 数组
+             *
+             * 第三步（渲染）：
+             *   - 调用 renderOrders(filtered) 将过滤排序后的结果渲染到表格
+             *
+             * 设计意图：搜索和排序串联执行，用户可以在搜索关键词的同时切换排序方式，
+             * 获得符合预期的筛选结果。
+             */
+            function performSearch() {
+                const keyword = $searchInput.val().toLowerCase().trim();
+                const sortType = $sortFilter.val();
+
+                // 第一步：关键词过滤
+                // 支持按订单编号、图书名称、用户名三个字段模糊匹配
+                const filtered = pendingOrders.filter(function (order) {
+                    if (keyword === '') return true;
+                    return order.orderNo.toLowerCase().includes(keyword) ||
+                        order.bookTitle.toLowerCase().includes(keyword) ||
+                        order.username.toLowerCase().includes(keyword);
+                });
+
+                // 第二步：排序
+                // 注意：sort() 会原地修改数组，filtered 被重新排序但引用不变
+                filtered.sort(function (a, b) {
+                    switch (sortType) {
+                        case 'date-desc':
+                            // 下单时间倒序：最新的在前
+                            return b.orderDate.localeCompare(a.orderDate);
+                        case 'date-asc':
+                            // 下单时间正序：最早的在前
+                            return a.orderDate.localeCompare(b.orderDate);
+                        case 'price-desc':
+                            // 总价倒序：金额高的在前
+                            return parseFloat(b.totalPrice) - parseFloat(a.totalPrice);
+                        case 'price-asc':
+                            // 总价正序：金额低的在前
+                            return parseFloat(a.totalPrice) - parseFloat(b.totalPrice);
+                        default:
+                            return 0;
+                    }
+                });
+
+                renderOrders(filtered);
+            }
+
+            // 搜索按钮点击事件：执行搜索 + 排序的组合过滤
+            $('#search-btn').on('click', performSearch);
+
+            // 排序下拉框改变时自动触发过滤，无需额外点击搜索按钮
+            $sortFilter.on('change', performSearch);
+
+            // 搜索框回车触发搜索，提升键盘操作效率
+            $searchInput.on('keypress', function (e) {
+                if (e.which === 13) {
+                    performSearch();
+                }
+            });
+
+            // 重置按钮：清空搜索关键词，恢复默认排序（按下单时间倒序），
+            // 重新渲染全部待处理订单（不做筛选）
+            $('#reset-btn').on('click', function () {
+                $searchInput.val('');
+                $sortFilter.val('date-desc');
+                renderOrders(pendingOrders);
+            });
+
+            // ==================== 订单详情弹窗 ====================
+
+            /**
+             * 显示订单详情弹窗
+             *
+             * 展示内容：订单编号、图书名称、用户名、数量、单价、总价、
+             * 订单状态、下单时间、联系电话、收货地址
+             *
+             * 安全说明：
+             * - 所有用户数据通过 jQuery .text() 方法设置，自动转义 HTML，
+             *   杜绝通过订单数据注入恶意脚本的风险（如订单备注中包含 <script> 标签）
+             * - 相比原来的字符串拼接方式，DOM API 创建元素从根本上消除了 XSS 隐患
+             *
+             * 弹窗交互：
+             * - 点击"详情"按钮打开弹窗
+             * - 点击右上角 X 按钮关闭
+             * - 点击弹窗以外的遮罩区域也可关闭
+             */
+            $(document).on('click', '.btn-detail', function () {
+                const id = $(this).data('id');
+                const order = pendingOrders.find(function (o) { return o.id === id; });
+                if (!order) return;
+
+                // 使用 jQuery DOM API 构建详情内容，避免字符串拼接造成的 XSS 风险
+                $detailContent.empty();
+
+                // 辅助函数：创建详情行，包含标签和值两个 span
+                function createDetailRow(labelText, valueText) {
+                    const $row = $('<div>').addClass('detail-row');
+                    $row.append($('<span>').addClass('detail-label').text(labelText));
+                    $row.append($('<span>').addClass('detail-value').text(valueText));
+                    return $row;
+                }
+
+                $detailContent.append(createDetailRow('订单编号：', order.orderNo));
+                $detailContent.append(createDetailRow('图书名称：', order.bookTitle));
+                $detailContent.append(createDetailRow('用户名：', order.username));
+                $detailContent.append(createDetailRow('数量：', String(order.quantity)));
+                $detailContent.append(createDetailRow('单价：', '¥' + parseFloat(order.unitPrice).toFixed(2)));
+                $detailContent.append(createDetailRow('总价：', '¥' + parseFloat(order.totalPrice).toFixed(2)));
+
+                // 状态行：包含带颜色标识的状态徽章
+                const $statusRow = $('<div>').addClass('detail-row');
+                const $statusBadge = $('<span>')
+                    .addClass('status-badge ' + getStatusClass(order.status))
+                    .text(getStatusText(order.status));
+                $statusRow.append($('<span>').addClass('detail-label').text('状态：'));
+                $statusRow.append($('<span>').addClass('detail-value').append($statusBadge));
+                $detailContent.append($statusRow);
+
+                $detailContent.append(createDetailRow('下单时间：', order.orderDate));
+                $detailContent.append(createDetailRow('联系电话：', order.phone || '无'));
+                $detailContent.append(createDetailRow('收货地址：', order.address || '无'));
+
+                $detailModal.css('display', 'block');
+            });
+
+            // 关闭详情弹窗：点击右上角 X 按钮
+            $closeDetail.on('click', function () {
+                $detailModal.css('display', 'none');
+            });
+
+            // 关闭详情弹窗：点击弹窗外部遮罩区域
+            // 通过判断 event.target 的 id 是否为 'detail-modal' 来区分遮罩层和弹窗内容
+            $(window).on('click', function (e) {
+                if ($(e.target).attr('id') === 'detail-modal') {
+                    $detailModal.css('display', 'none');
+                }
+            });
+
+            // ==================== 发货操作 ====================
+
+            /**
+             * 单条订单发货
+             *
+             * 操作流程：
+             * 1. 用户点击表格中某一行的"发货"按钮
+             * 2. 弹出确认对话框，防止误操作
+             * 3. 用户确认后，在 allOrders 中找到对应订单，将其 status 改为 'shipped'
+             * 4. 将更新后的 allOrders 写回 localStorage（带 try/catch 保护）
+             * 5. 写入成功后调用 refreshPage() 刷新页面数据和视图
+             *
+             * 注意：如果 localStorage 写入失败（如存储空间已满），
+             * allOrders 内存中的修改不会回滚，但页面上不会显示变更效果，
+             * 因为 refreshPage() 仅在写入成功后才会被调用。
+             */
+            $(document).on('click', '.btn-ship', function () {
+                const id = $(this).data('id');
+                if (confirm('确认该订单已发货？')) {
+                    // 在全部订单中查找对应订单
+                    const order = allOrders.find(function (o) { return o.id === id; });
+                    if (order) {
+                        order.status = 'shipped';
+                        // 安全写入 localStorage
+                        if (saveAllOrders(allOrders)) {
+                            refreshPage();
+                        }
+                    }
+                }
+            });
+
+            /**
+             * 一键发货：批量将所有待处理订单标记为已发货
+             *
+             * 【破坏性操作警告】
+             * 此操作会将当前所有 status === 'pending' 的订单一次性全部改为 'shipped'，
+             * 操作不可撤销，影响范围大。因此触发前弹出二次确认对话框，
+             * 明确告知用户即将影响的订单数量，并要求用户确认。
+             *
+             * 操作流程：
+             * 1. 检查是否有待处理订单，无则提示用户
+             * 2. 弹出确认对话框，显示即将发货的订单数量
+             * 3. 用户确认后，遍历 allOrders，将所有 pending 订单改为 shipped
+             * 4. 将更新后的 allOrders 写回 localStorage
+             * 5. 写入成功后刷新页面
+             *
+             * TODO: 已知限制 - 批量操作缺少事务回滚机制
+             * 当前实现直接遍历 allOrders 修改状态，然后一次性写入 localStorage。
+             * 如果在遍历过程中或写入时发生异常，可能存在以下问题：
+             *   - 内存中部分订单状态已被修改，但 localStorage 写入失败，
+             *     导致页面显示与实际存储数据不一致
+             *   - 无法回滚已修改的内存状态
+             * 建议改进方案：
+             *   - 先深拷贝原数组作为快照，写入失败时用快照恢复
+             *   - 或引入分批提交机制，每批处理 N 条并分别写入
+             *   - 或使用 IndexedDB 替代 localStorage 以获得事务支持
+             */
+            $('#ship-all-btn').on('click', function () {
+                if (pendingOrders.length === 0) {
+                    alert('当前没有待处理的订单');
+                    return;
+                }
+                // 二次确认：明确告知用户这是破坏性批量操作
+                if (confirm(
+                    '【批量发货确认】\n\n' +
+                    '即将把全部 ' + pendingOrders.length + ' 条待处理订单标记为已发货。\n\n' +
+                    '此操作不可撤销，请确认是否继续？'
+                )) {
+                    // 遍历全部订单，将所有 pending 状态的订单改为 shipped
+                    allOrders.forEach(function (order) {
+                        if (order.status === 'pending') {
+                            order.status = 'shipped';
+                        }
+                    });
+                    // 安全写入 localStorage
+                    if (saveAllOrders(allOrders)) {
+                        refreshPage();
+                    }
+                }
+            });
+
+            // ==================== 取消订单操作 ====================
+
+            /**
+             * 取消订单：将订单状态从 pending 改为 cancelled
+             *
+             * 操作流程：
+             * 1. 用户点击表格中某一行的"取消"按钮
+             * 2. 弹出确认对话框，明确告知此操作不可逆
+             * 3. 用户确认后，在 allOrders 中找到对应订单，将其 status 改为 'cancelled'
+             * 4. 将更新后的 allOrders 写回 localStorage（带 try/catch 保护）
+             * 5. 写入成功后刷新页面，该订单将从待处理列表消失
+             *
+             * 注意：已取消的订单不会出现在本页面（因为只展示 pending 状态的订单），
+             * 但可以在订单总览页面中查看所有已取消的订单。
+             */
+            $(document).on('click', '.btn-cancel', function () {
+                const id = $(this).data('id');
+                if (confirm('确定要取消该订单吗？取消后无法恢复。')) {
+                    const order = allOrders.find(function (o) { return o.id === id; });
+                    if (order) {
+                        order.status = 'cancelled';
+                        if (saveAllOrders(allOrders)) {
+                            refreshPage();
+                        }
+                    }
+                }
+            });
+
+            // ==================== 页面初始化 ====================
+
+            // 页面加载完成后执行初始渲染：
+            // 1. 从 localStorage 重新加载最新数据
+            // 2. 渲染待处理订单表格
+            // 3. 更新统计卡片数值
+            refreshPage();
+        });
+    </script>
+</body>
+</html>

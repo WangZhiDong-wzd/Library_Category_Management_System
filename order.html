@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>订单总览</title>
+    <!-- Bootstrap 4.6.2 核心样式：提供栅格系统、表格、按钮等基础组件样式 -->
+    <link rel="stylesheet" href="bootstrap-4.6.2-dist/css/bootstrap.min.css">
+    <!-- 订单模块自定义样式：统计卡片、表格、状态标签、弹窗等 -->
+    <link rel="stylesheet" href="css/order.css">
+    <!-- jQuery 3.7.1：提供 DOM 操作、事件处理、AJAX 等基础能力 -->
+    <script src="js/jquery-3.7.1.min.js"></script>
+    <!-- Bootstrap Bundle：包含 Bootstrap JS 组件和 Popper.js 依赖 -->
+    <script src="bootstrap-4.6.2-dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- 页面标题 -->
+        <h1 class="page-title">订单总览</h1>
+
+        <!-- 统计卡片区域：展示不同状态订单的数量概览 -->
+        <div class="stats-row">
+            <div class="stat-card total">
+                <div class="stat-num" id="stat-total">0</div>
+                <div class="stat-label">全部订单</div>
+            </div>
+            <div class="stat-card pending">
+                <div class="stat-num" id="stat-pending">0</div>
+                <div class="stat-label">待处理</div>
+            </div>
+            <div class="stat-card shipped">
+                <div class="stat-num" id="stat-shipped">0</div>
+                <div class="stat-label">已发货</div>
+            </div>
+            <div class="stat-card completed">
+                <div class="stat-num" id="stat-completed">0</div>
+                <div class="stat-label">已完成</div>
+            </div>
+        </div>
+
+        <!-- 搜索与筛选区域 -->
+        <div class="search-section">
+            <!-- 搜索输入框：支持按订单号、图书名称、用户名搜索 -->
+            <input type="text" id="search-input" placeholder="搜索订单号 / 图书名称 / 用户名">
+            <!-- 状态下拉筛选：全部 / 待处理 / 已发货 / 已完成 / 已取消 -->
+            <select id="status-filter">
+                <option value="">全部状态</option>
+                <option value="pending">待处理</option>
+                <option value="shipped">已发货</option>
+                <option value="completed">已完成</option>
+                <option value="cancelled">已取消</option>
+            </select>
+            <!-- 搜索按钮：触发过滤逻辑 -->
+            <button id="search-btn" class="btn btn-primary">搜索</button>
+            <!-- 重置按钮：清空搜索条件，恢复显示全部订单 -->
+            <button id="reset-btn" class="btn btn-secondary">重置</button>
+        </div>
+
+        <!-- 订单表格区域 -->
+        <div class="table-container">
+            <table id="order-table">
+                <thead>
+                    <tr>
+                        <th>订单编号</th>
+                        <th>图书名称</th>
+                        <th>用户名</th>
+                        <th>数量</th>
+                        <th>总价</th>
+                        <th>订单状态</th>
+                        <th>下单时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 订单数据通过 JS 动态渲染 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 订单详情弹窗（含 ARIA 无障碍属性） -->
+    <div id="detail-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="detail-modal-title">
+        <div class="modal-content">
+            <span class="close" id="close-detail" aria-label="关闭">&times;</span>
+            <h3 id="detail-modal-title">订单详情</h3>
+            <!-- 详情内容通过 JS 动态填充 -->
+            <div id="detail-content"></div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ===================================================================
+         * 订单数据结构文档 (Order Data Structure)
+         * ===================================================================
+         *
+         * 每条订单记录均为一个包含以下字段的普通对象：
+         *
+         * @property {number} id          - 订单唯一标识（自增数字），用于查找和删除操作
+         * @property {string} orderNo    - 订单编号，格式 "ORD" + YYYYMMDD + 四位序号
+         *                                 示例："ORD202601020001"
+         * @property {string} bookTitle  - 图书名称，选自模拟数据中的图书标题列表
+         * @property {string} username   - 下单用户名，选自模拟数据中的用户名列表
+         * @property {number} quantity   - 购买数量（1~10 之间的随机整数）
+         * @property {number} unitPrice  - 图书单价（20~100 之间的随机浮点数，保留两位小数）
+         * @property {number} totalPrice - 订单总价 = quantity × unitPrice（保留两位小数）
+         * @property {string} status     - 订单状态枚举值：
+         *                                 'pending'   — 待处理
+         *                                 'shipped'   — 已发货
+         *                                 'completed' — 已完成
+         *                                 'cancelled' — 已取消
+         * @property {string} orderDate  - 下单时间，格式 "YYYY-MM-DD HH:mm:ss"
+         * @property {string} phone      - 联系电话，选自模拟手机号列表
+         * @property {string} address    - 收货地址，选自模拟地址列表
+         *
+         * 数据持久化策略：
+         *   订单数组以 JSON 格式存储在 localStorage 的 'orders' 键中。
+         *   每次增删改操作后同步写入 localStorage，确保刷新页面后数据不丢失。
+         * ===================================================================
+         */
+
+        $(function () {
+            // ==================== jQuery 选择器缓存 ====================
+            // 缓存高频使用的 DOM 元素引用，避免每次操作都重复查询 DOM，提升性能
+
+            const $searchInput    = $('#search-input');      // 搜索关键词输入框
+            const $statusFilter   = $('#status-filter');      // 状态下拉筛选器
+            const $searchBtn      = $('#search-btn');         // 搜索按钮
+            const $resetBtn       = $('#reset-btn');          // 重置按钮
+            const $orderTableBody = $('#order-table tbody');  // 订单表格 tbody
+            const $detailModal    = $('#detail-modal');       // 订单详情弹窗
+            const $detailContent  = $('#detail-content');     // 详情弹窗内容容器
+            const $closeDetail    = $('#close-detail');       // 详情弹窗关闭按钮
+            const $statTotal      = $('#stat-total');         // 统计卡片 - 全部订单数
+            const $statPending    = $('#stat-pending');       // 统计卡片 - 待处理数
+            const $statShipped    = $('#stat-shipped');       // 统计卡片 - 已发货数
+            const $statCompleted  = $('#stat-completed');     // 统计卡片 - 已完成数
+
+            // ==================== 订单数据初始化 ====================
+
+            /**
+             * 订单数据加载策略（关键修复）：
+             * 1. 优先尝试从 localStorage 读取已保存的订单数据
+             *    —— 因为用户可能已修改过订单状态或删除过订单，这些操作会同步写入 localStorage
+             * 2. 仅当 localStorage 中没有数据（首次访问或数据被清除）时，
+             *    才调用 generateMockOrders() 生成模拟数据作为兜底
+             * 3. 模拟数据生成后自动保存到 localStorage，保证后续刷新页面时数据一致
+             * 4. 如果 localStorage 读写过程中发生异常（如隐私模式、配额超限），
+             *    降级使用模拟数据（仅内存中），并输出警告日志
+             */
+            let orders; // 订单数组，使用 let 以便删除操作可重新赋值
+
+            try {
+                // 第一步：尝试从 localStorage 获取已保存的订单
+                const savedOrders = localStorage.getItem('orders');
+                if (savedOrders) {
+                    // localStorage 中有数据：解析 JSON 并使用
+                    orders = JSON.parse(savedOrders);
+                } else {
+                    // localStorage 为空（首次加载）：生成模拟数据并保存
+                    orders = generateMockOrders();
+                    localStorage.setItem('orders', JSON.stringify(orders));
+                }
+            } catch (e) {
+                // 读取/写入 localStorage 失败（例如无痕浏览、存储已满等）
+                // 降级策略：仅使用内存中的模拟数据，不持久化
+                console.warn('localStorage 操作失败，使用内存模拟数据：', e);
+                orders = generateMockOrders();
+            }
+
+            // ==================== 模拟数据生成函数 ====================
+
+            /**
+             * 生成模拟订单数据（generateMockOrders）
+             *
+             * 功能说明：
+             *   随机生成 8~15 条订单记录，包含完整的订单字段。
+             *   所有字段值均从预定义的候选列表中随机选取或计算得出。
+             *
+             * 生成逻辑：
+             *   - 订单数量：8 + Math.floor(Math.random() * 8) → 8~15 条
+             *   - 图书名称：从 15 本计算机经典书籍中随机选取
+             *   - 用户名：从 15 个中文姓名中随机选取
+             *   - 手机号：从 10 个模拟手机号中随机选取
+             *   - 地址：从 10 个城市地址中随机选取
+             *   - 数量：1~10 之间的随机整数
+             *   - 单价：20~100 之间的随机浮点数（保留两位小数）
+             *   - 总价：数量 × 单价（保留两位小数）
+             *   - 状态：从 ['pending', 'shipped', 'completed', 'cancelled'] 中随机选取
+             *   - 下单时间：当前日期往前 1~30 天内的随机时刻，格式 "YYYY-MM-DD HH:mm:ss"
+             *   - 订单编号：格式 "ORD" + 日期部分(YYYYMMDD) + 四位序号补零
+             *
+             * @returns {Object[]} 模拟订单数组
+             */
+            function generateMockOrders() {
+                // 订单状态候选列表
+                const statuses = ['pending', 'shipped', 'completed', 'cancelled'];
+
+                // 图书标题候选列表（15 本计算机经典书籍）
+                const bookTitles = [
+                    'JavaScript高级程序设计', 'Python编程从入门到实践', 'Java核心技术',
+                    '算法导论', '深入理解计算机系统', '计算机网络自顶向下',
+                    '数据库系统概念', '操作系统概念', '编译原理',
+                    '计算机网络', '数据结构与算法', '设计模式',
+                    '代码大全', '人月神话', '黑客与画家'
+                ];
+
+                // 用户名候选列表（15 个中文姓名）
+                const usernames = [
+                    '张三', '李四', '王五', '赵六', '陈七',
+                    '周八', '吴九', '郑十', '小明', '小红',
+                    '阿强', '阿花', '大伟', '小丽', '建国'
+                ];
+
+                // 手机号候选列表（10 个模拟号码）
+                const phones = [
+                    '13800138001', '13900139002', '13700137003',
+                    '13600136004', '13500135005', '13400134006',
+                    '13300133007', '13200132008', '13100131009', '13000130010'
+                ];
+
+                // 地址候选列表（10 个城市地址）
+                const addresses = [
+                    '北京市海淀区中关村大街1号', '上海市浦东新区张江高科技园区',
+                    '广州市天河区体育西路100号', '深圳市南山区科技园路88号',
+                    '杭州市西湖区文三路200号', '成都市武侯区天府大道300号',
+                    '武汉市洪山区珞喻路150号', '南京市鼓楼区汉口路22号',
+                    '西安市雁塔区长安南路50号', '重庆市渝中区解放碑步行街8号'
+                ];
+
+                // 随机生成 8~15 条订单
+                const count = 8 + Math.floor(Math.random() * 8);
+                const mockOrders = [];
+
+                for (let i = 1; i <= count; i++) {
+                    // 随机生成数量（1~10）
+                    const quantity = 1 + Math.floor(Math.random() * 10);
+                    // 随机生成单价（20~100，字符串形式保留两位小数）
+                    const unitPrice = (20 + Math.random() * 80).toFixed(2);
+                    // 计算总价（字符串形式保留两位小数）
+                    const totalPrice = (quantity * unitPrice).toFixed(2);
+                    // 随机选取图书、用户
+                    const bookTitle = bookTitles[Math.floor(Math.random() * bookTitles.length)];
+                    const username   = usernames[Math.floor(Math.random() * usernames.length)];
+                    // 随机选取订单状态
+                    const status = statuses[Math.floor(Math.random() * statuses.length)];
+
+                    // 生成随机过去日期（1~30 天前）
+                    const daysAgo = Math.floor(Math.random() * 30);
+                    const date = new Date();
+                    date.setDate(date.getDate() - daysAgo);
+                    // 格式化日期字符串：YYYY-MM-DD HH:mm:ss
+                    const dateStr = date.getFullYear() + '-' +
+                        String(date.getMonth() + 1).padStart(2, '0') + '-' +
+                        String(date.getDate()).padStart(2, '0') + ' ' +
+                        String(date.getHours()).padStart(2, '0') + ':' +
+                        String(date.getMinutes()).padStart(2, '0') + ':' +
+                        String(date.getSeconds()).padStart(2, '0');
+
+                    // 构建订单编号：ORD + 日期(YYYYMMDD) + 四位序号补零
+                    const orderNo = 'ORD' + date.getFullYear() +
+                        String(date.getMonth() + 1).padStart(2, '0') +
+                        String(date.getDate()).padStart(2, '0') +
+                        String(i).padStart(4, '0');
+
+                    // 组装订单对象并入列
+                    mockOrders.push({
+                        id: i,
+                        orderNo: orderNo,
+                        bookTitle: bookTitle,
+                        username: username,
+                        quantity: quantity,
+                        unitPrice: parseFloat(unitPrice),
+                        totalPrice: parseFloat(totalPrice),
+                        status: status,
+                        orderDate: dateStr,
+                        phone: phones[Math.floor(Math.random() * phones.length)],
+                        address: addresses[Math.floor(Math.random() * addresses.length)]
+                    });
+                }
+
+                return mockOrders;
+            }
+
+            // ==================== 统计与工具函数 ====================
+
+            /**
+             * 更新顶部统计卡片数字（updateStats）
+             *
+             * 遍历 orders 数组，按 status 字段分类统计各状态的订单数量，
+             * 并更新四个统计卡片 DOM 的文本内容。
+             *
+             * 统计分类：
+             *   - 全部订单：orders.length
+             *   - 待处理：status === 'pending'
+             *   - 已发货：status === 'shipped'
+             *   - 已完成：status === 'completed'
+             */
+            function updateStats() {
+                // 使用缓存的 jQuery 选择器直接赋值
+                $statTotal.text(orders.length);
+                $statPending.text(orders.filter(function (o) { return o.status === 'pending'; }).length);
+                $statShipped.text(orders.filter(function (o) { return o.status === 'shipped'; }).length);
+                $statCompleted.text(orders.filter(function (o) { return o.status === 'completed'; }).length);
+            }
+
+            /**
+             * 状态英文标识 → 中文显示文本映射（getStatusText）
+             *
+             * 在表格状态列、详情弹窗、状态弹窗中统一使用此函数获取中文文本，
+             * 确保状态名称在各处显示一致。
+             *
+             * @param {string} status - 订单状态英文标识（'pending' | 'shipped' | 'completed' | 'cancelled'）
+             * @returns {string} 对应的中文状态文本，未知状态则原样返回
+             */
+            function getStatusText(status) {
+                const map = {
+                    'pending': '待处理',
+                    'shipped': '已发货',
+                    'completed': '已完成',
+                    'cancelled': '已取消'
+                };
+                return map[status] || status;
+            }
+
+            /**
+             * 状态英文标识 → CSS 样式类名映射（getStatusClass）
+             *
+             * 不同状态使用不同颜色/样式的 CSS 类名，在表格和弹窗中通过此类名
+             * 渲染不同视觉风格的状态标签。
+             *
+             * @param {string} status - 订单状态英文标识
+             * @returns {string} 对应的 CSS 类名，未知状态返回空字符串
+             */
+            function getStatusClass(status) {
+                const map = {
+                    'pending': 'status-pending',
+                    'shipped': 'status-shipped',
+                    'completed': 'status-completed',
+                    'cancelled': 'status-cancelled'
+                };
+                return map[status] || '';
+            }
+
+            // ==================== 表格渲染 ====================
+
+            /**
+             * 渲染订单表格（renderOrders）
+             *
+             * 接收订单数组，清空当前表格体后逐行构建表格 HTML。
+             * 所有用户数据均通过 jQuery 的 .text() 方法设置，杜绝 XSS 注入风险。
+             * 操作按钮使用 jQuery DOM 创建并通过 .attr() 设置 data-id 属性。
+             *
+             * 渲染内容：订单编号、图书名称、用户名、数量、总价(带¥符号)、
+             *           状态(带彩色标签)、下单时间、操作按钮(详情/状态/删除)
+             *
+             * @param {Object[]} orderList - 需要渲染的订单数组
+             */
+            function renderOrders(orderList) {
+                // 使用缓存的 tbody 引用，清空旧数据
+                $orderTableBody.empty();
+
+                // 无数据时显示友好提示行
+                if (orderList.length === 0) {
+                    $orderTableBody.append('<tr><td colspan="8" style="text-align:center;color:#95a5a6;padding:30px;">暂无订单数据</td></tr>');
+                    return;
+                }
+
+                // 遍历订单数组，逐行构建表格（全部使用 DOM 创建，避免 XSS）
+                orderList.forEach(function (order) {
+                    const $row = $('<tr>');
+
+                    // 订单编号列
+                    $row.append($('<td>').text(order.orderNo));
+                    // 图书名称列
+                    $row.append($('<td>').text(order.bookTitle));
+                    // 用户名列
+                    $row.append($('<td>').text(order.username));
+                    // 数量列
+                    $row.append($('<td>').text(order.quantity));
+                    // 总价列（带 ¥ 符号，保留两位小数）
+                    $row.append($('<td>').text('¥' + parseFloat(order.totalPrice).toFixed(2)));
+
+                    // 状态列：使用状态标签（彩色徽章），text() 防止 XSS
+                    const $statusBadge = $('<span>')
+                        .addClass('status-badge ' + getStatusClass(order.status))
+                        .text(getStatusText(order.status));
+                    $row.append($('<td>').append($statusBadge));
+
+                    // 下单时间列
+                    $row.append($('<td>').text(order.orderDate));
+
+                    // 操作按钮列（全部使用 DOM 创建，.attr() 安全设置 data-id）
+                    const $actionTd = $('<td>');
+                    $actionTd.append(
+                        $('<button>').addClass('btn btn-info btn-detail').text('详情').attr('data-id', order.id),
+                        $('<button>').addClass('btn btn-edit btn-status').text('状态').attr('data-id', order.id),
+                        $('<button>').addClass('btn btn-delete btn-del').text('删除').attr('data-id', order.id)
+                    );
+                    $row.append($actionTd);
+
+                    $orderTableBody.append($row);
+                });
+            }
+
+            /**
+             * 刷新页面数据（refreshPage）
+             *
+             * 组合调用 renderOrders 和 updateStats，一次性完成表格和统计卡片的更新。
+             * 在页面初始化、状态修改、删除操作后调用。
+             */
+            function refreshPage() {
+                renderOrders(orders);
+                updateStats();
+            }
+
+            // ==================== 搜索与筛选逻辑 ====================
+
+            /**
+             * 执行搜索和筛选（performSearch）
+             *
+             * 从搜索输入框获取关键词（支持订单号、图书名称、用户名），
+             * 从状态下拉框获取筛选条件，对 orders 数组进行双重过滤：
+             *   1. 关键词过滤：不区分大小写，匹配 orderNo / bookTitle / username（任一包含即命中）
+             *   2. 状态过滤：空字符串表示不限制，否则精确匹配 status 字段
+             * 过滤结果传入 renderOrders 重新渲染表格。
+             *
+             * 注意：搜索/筛选不影响原始 orders 数组，也不影响统计卡片。
+             */
+            function performSearch() {
+                // 获取搜索关键词（转小写 + 去首尾空白）
+                const keyword = $searchInput.val().toLowerCase().trim();
+                // 获取状态筛选值
+                const statusFilter = $statusFilter.val();
+
+                const filtered = orders.filter(function (order) {
+                    // 条件一：关键词匹配 ——
+                    // 如果关键词为空，所有订单通过此项；
+                    // 否则检查订单号、图书名称、用户名中是否任一包含关键词
+                    let matchKeyword = true;
+                    if (keyword !== '') {
+                        matchKeyword = order.orderNo.toLowerCase().includes(keyword) ||
+                            order.bookTitle.toLowerCase().includes(keyword) ||
+                            order.username.toLowerCase().includes(keyword);
+                    }
+
+                    // 条件二：状态匹配 ——
+                    // 空字符串表示"全部状态"，不做过滤；
+                    // 否则严格按 status 字段值匹配
+                    let matchStatus = true;
+                    if (statusFilter !== '') {
+                        matchStatus = order.status === statusFilter;
+                    }
+
+                    // 两个条件均满足的订单才保留
+                    return matchKeyword && matchStatus;
+                });
+
+                // 使用过滤结果重新渲染表格（不更新统计卡片）
+                renderOrders(filtered);
+            }
+
+            /**
+             * 搜索按钮点击事件
+             * 触发 performSearch 执行关键词 + 状态双重过滤
+             */
+            $searchBtn.on('click', performSearch);
+
+            /**
+             * 状态下拉框 change 事件
+             * 切换筛选状态时自动触发搜索，提升交互体验
+             */
+            $statusFilter.on('change', performSearch);
+
+            /**
+             * 搜索框回车键事件
+             * 在搜索输入框中按下 Enter 键时触发搜索
+             */
+            $searchInput.on('keypress', function (e) {
+                if (e.which === 13) {
+                    performSearch();
+                }
+            });
+
+            /**
+             * 重置按钮点击事件
+             * 清空搜索框文本和状态下拉框选中项，恢复显示全部订单
+             */
+            $resetBtn.on('click', function () {
+                $searchInput.val('');
+                $statusFilter.val('');
+                renderOrders(orders);
+            });
+
+            // ==================== 订单详情弹窗 ====================
+
+            /**
+             * 显示订单详情弹窗（事件委托）
+             *
+             * 点击任意"详情"按钮时：
+             * 1. 通过 data-id 属性获取订单 ID
+             * 2. 在 orders 数组中查找对应订单对象
+             * 3. 使用 jQuery DOM 创建详情内容（.text() 设置用户数据，防止 XSS）
+             * 4. 显示弹窗
+             *
+             * @listens click .btn-detail
+             */
+            $(document).on('click', '.btn-detail', function () {
+                const id = $(this).data('id');
+                const order = orders.find(function (o) { return o.id === id; });
+                if (!order) return;
+
+                // 清空旧内容，使用 DOM 创建新内容（.text() 防止 XSS 注入）
+                $detailContent.empty();
+
+                /**
+                 * 辅助函数：创建详情行
+                 * @param {string} label - 标签文本（固定文案，无风险）
+                 * @param {string|jQuery} value - 值文本或 jQuery 元素
+                 */
+                function addDetailRow(label, value) {
+                    const $row = $('<div>').addClass('detail-row');
+                    $row.append($('<span>').addClass('detail-label').text(label));
+                    const $valueSpan = $('<span>').addClass('detail-value');
+                    // 如果 value 是 jQuery 对象（如状态标签），直接 append
+                    // 否则用 .text() 安全设置文本
+                    if (value instanceof jQuery) {
+                        $valueSpan.append(value);
+                    } else {
+                        $valueSpan.text(value);
+                    }
+                    $row.append($valueSpan);
+                    $detailContent.append($row);
+                }
+
+                // 逐行构建详情内容（所有用户数据通过 .text() 安全设置）
+                addDetailRow('订单编号：', order.orderNo);
+                addDetailRow('图书名称：', order.bookTitle);
+                addDetailRow('用户名：', order.username);
+                addDetailRow('数量：', String(order.quantity));
+                addDetailRow('单价：', '¥' + parseFloat(order.unitPrice).toFixed(2));
+                addDetailRow('总价：', '¥' + parseFloat(order.totalPrice).toFixed(2));
+
+                // 状态行：需要渲染带颜色的标签（使用 jQuery 对象传入）
+                const $statusBadge = $('<span>')
+                    .addClass('status-badge ' + getStatusClass(order.status))
+                    .text(getStatusText(order.status));
+                addDetailRow('状态：', $statusBadge);
+
+                addDetailRow('下单时间：', order.orderDate);
+                addDetailRow('联系电话：', order.phone || '无');
+                addDetailRow('收货地址：', order.address || '无');
+
+                // 显示弹窗
+                $detailModal.css('display', 'block');
+            });
+
+            /**
+             * 关闭详情弹窗按钮
+             * 点击弹窗右上角 × 按钮时隐藏弹窗
+             */
+            $closeDetail.on('click', function () {
+                $detailModal.css('display', 'none');
+            });
+
+            /**
+             * 点击弹窗遮罩层外部关闭弹窗
+             *
+             * 监听 window 上的 click 事件，当点击目标为弹窗自身（遮罩层）时关闭，
+             * 点击弹窗内容区域（内部白色卡片）不会关闭。
+             * 同时处理详情弹窗和状态弹窗。
+             */
+            $(window).on('click', function (e) {
+                // 详情弹窗：点击遮罩层关闭
+                if ($(e.target).attr('id') === 'detail-modal') {
+                    $detailModal.css('display', 'none');
+                }
+                // 状态弹窗：点击遮罩层关闭（直接移除 DOM）
+                if ($(e.target).attr('id') === 'status-modal') {
+                    $('#status-modal').remove();
+                }
+            });
+
+            // ==================== 订单状态修改弹窗 ====================
+
+            /**
+             * 打开状态修改弹窗（事件委托）
+             *
+             * 功能流程：
+             * 1. 通过 data-id 获取订单 ID，查找订单对象
+             * 2. 【修复弹窗累积】先移除已存在的旧弹窗，避免页面弹窗越来越多
+             * 3. 使用 jQuery DOM 创建完整弹窗结构（.text() 设置所有动态内容，防 XSS）
+             * 4. 添加 ARIA 无障碍属性（role="dialog", aria-modal="true", aria-labelledby）
+             * 5. 状态选项排除当前状态的相同值，避免无意义的"切换到自己"
+             *
+             * @listens click .btn-status
+             */
+            $(document).on('click', '.btn-status', function () {
+                const id = $(this).data('id');
+                const order = orders.find(function (o) { return o.id === id; });
+                if (!order) return;
+
+                // 【关键修复】在创建新弹窗前，先移除已经存在的状态弹窗，防止弹窗累积
+                $('#status-modal').remove();
+
+                // ---- 创建弹窗外层容器（含 ARIA 属性） ----
+                const $modal = $('<div>', {
+                    id: 'status-modal',
+                    class: 'modal',
+                    role: 'dialog',
+                    'aria-modal': 'true',
+                    'aria-labelledby': 'status-modal-title'
+                }).css('display', 'block');
+
+                // ---- 创建弹窗内容卡片 ----
+                const $content = $('<div>', { class: 'modal-content' });
+
+                // 关闭按钮（.html('&times;') 渲染 × 符号，固定文本无 XSS 风险）
+                $content.append(
+                    $('<span>', { class: 'close', id: 'close-status', 'aria-label': '关闭' }).html('&times;')
+                );
+
+                // 弹窗标题
+                $content.append(
+                    $('<h3>', { id: 'status-modal-title' }).text('修改订单状态')
+                );
+
+                // 订单编号行（.text() 防 XSS）
+                $content.append(
+                    $('<p>', { style: 'margin-bottom:10px;' })
+                        .append('订单编号：')
+                        .append($('<strong>').text(order.orderNo))
+                );
+
+                // 当前状态行（.text() 防 XSS）
+                const $currentBadge = $('<span>')
+                    .addClass('status-badge ' + getStatusClass(order.status))
+                    .text(getStatusText(order.status));
+                $content.append(
+                    $('<p>', { style: 'margin-bottom:15px;' })
+                        .append('当前状态：')
+                        .append($currentBadge)
+                );
+
+                // 新状态下拉框：排除当前状态（不提供"切换到自己"的选项）
+                const $select = $('<select>', {
+                    id: 'new-status',
+                    style: 'padding:8px;border:1px solid #ddd;border-radius:4px;'
+                });
+                const allStatuses = ['pending', 'shipped', 'completed', 'cancelled'];
+                allStatuses.forEach(function (s) {
+                    if (s !== order.status) {
+                        $select.append(
+                            $('<option>', { value: s }).text(getStatusText(s))
+                        );
+                    }
+                });
+
+                $content.append(
+                    $('<div>', { class: 'form-group' })
+                        .append($('<label>', { for: 'new-status' }).text('新状态：'))
+                        .append($select)
+                );
+
+                // 操作按钮区
+                $content.append(
+                    $('<div>', { class: 'form-actions', style: 'margin-top:20px;text-align:right;' })
+                        .append(
+                            $('<button>', { id: 'save-status', class: 'btn btn-success' })
+                                .text('保存')
+                                .attr('data-id', order.id)
+                        )
+                        .append(
+                            $('<button>', { id: 'cancel-status', class: 'btn btn-secondary' })
+                                .text('取消')
+                        )
+                );
+
+                // 组装弹窗并添加到页面
+                $modal.append($content);
+                $('body').append($modal);
+            });
+
+            /**
+             * 关闭状态弹窗（事件委托）
+             *
+             * 点击关闭按钮（×）或"取消"按钮时，从 DOM 中完全移除状态弹窗。
+             * 使用事件委托确保对动态创建的弹窗有效。
+             */
+            $(document).on('click', '#close-status, #cancel-status', function () {
+                $('#status-modal').remove();
+            });
+
+            /**
+             * 保存状态修改（事件委托）
+             *
+             * 功能流程：
+             * 1. 获取新状态值和订单 ID
+             * 2. 【新增】弹出确认对话框，防止误操作
+             * 3. 查找订单并更新 status 字段
+             * 4. 【异常保护】通过 try/catch 将更新后的订单数组写入 localStorage
+             * 5. 刷新页面（表格 + 统计卡片）
+             * 6. 移除弹窗
+             *
+             * @listens click #save-status
+             */
+            $(document).on('click', '#save-status', function () {
+                const id = $(this).data('id');
+                const newStatus = $('#new-status').val();
+
+                // 【新增】状态修改前弹出确认对话框，防止误操作
+                if (!confirm('确定要将该订单状态修改为"' + getStatusText(newStatus) + '"吗？')) {
+                    return;
+                }
+
+                const order = orders.find(function (o) { return o.id === id; });
+                if (order) {
+                    // 更新状态
+                    order.status = newStatus;
+
+                    // 将更新后的数据保存到 localStorage（try/catch 异常保护）
+                    try {
+                        localStorage.setItem('orders', JSON.stringify(orders));
+                    } catch (e) {
+                        console.warn('localStorage 保存失败：', e);
+                    }
+
+                    // 刷新页面显示（表格 + 统计卡片）
+                    refreshPage();
+                }
+
+                // 关闭弹窗
+                $('#status-modal').remove();
+            });
+
+            // ==================== 删除订单 ====================
+
+            /**
+             * 删除订单（事件委托）
+             *
+             * 功能流程：
+             * 1. 通过 data-id 获取订单 ID
+             * 2. 弹出浏览器原生确认框（confirm），防止误删
+             * 3. 用户确认后，用 filter 过滤掉该 ID 的订单，重新赋值给 orders
+             * 4. 【异常保护】通过 try/catch 将更新后的数组写入 localStorage
+             * 5. 刷新页面
+             *
+             * @listens click .btn-del
+             */
+            $(document).on('click', '.btn-del', function () {
+                const id = $(this).data('id');
+
+                // 删除操作确认对话框
+                if (confirm('确定要删除该订单吗？此操作不可恢复。')) {
+                    // 从数组中过滤掉指定 ID 的订单（重新赋值以更新引用）
+                    orders = orders.filter(function (o) { return o.id !== id; });
+
+                    // 将更新后的数据同步到 localStorage（try/catch 异常保护）
+                    try {
+                        localStorage.setItem('orders', JSON.stringify(orders));
+                    } catch (e) {
+                        console.warn('localStorage 保存失败：', e);
+                    }
+
+                    // 刷新页面显示（表格 + 统计卡片）
+                    refreshPage();
+                }
+            });
+
+            // ==================== 页面初始化 ====================
+
+            /**
+             * 首次加载时渲染全部订单并更新统计数据
+             * orders 变量在脚本顶部已通过 localStorage/mock 初始化完毕
+             */
+            refreshPage();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据分析仪表盘</title>
+    <!-- Bootstrap 4.6.2 核心样式 -->
+    <link rel="stylesheet" href="bootstrap-4.6.2-dist/css/bootstrap.min.css">
+    <!-- 仪表盘自定义样式 -->
+    <link rel="stylesheet" href="css/dashboard.css">
+    <!-- jQuery 3.7.1 -->
+    <script src="js/jquery-3.7.1.min.js"></script>
+    <!-- Bootstrap Bundle -->
+    <script src="bootstrap-4.6.2-dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Chart.js 4.4.0：轻量级图表库，本地加载，支持柱状图/折线图/饼图等 -->
+    <script src="js/chart.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- 页面标题 -->
+        <h1 class="page-title">数据分析仪表盘</h1>
+
+        <!-- 顶部统计卡片：从 localStorage 读取真实数据 -->
+        <div class="stats-row">
+            <!-- 图书总数 -->
+            <div class="stat-card">
+                <div class="stat-icon icon-books">&#128218;</div>
+                <div class="stat-info">
+                    <div class="stat-num" id="stat-books">0</div>
+                    <div class="stat-label">图书总数</div>
+                </div>
+            </div>
+            <!-- 订单总数 -->
+            <div class="stat-card">
+                <div class="stat-icon icon-orders">&#128196;</div>
+                <div class="stat-info">
+                    <div class="stat-num" id="stat-orders">0</div>
+                    <div class="stat-label">订单总数</div>
+                </div>
+            </div>
+            <!-- 用户总数 -->
+            <div class="stat-card">
+                <div class="stat-icon icon-users">&#128101;</div>
+                <div class="stat-info">
+                    <div class="stat-num" id="stat-users">0</div>
+                    <div class="stat-label">注册用户</div>
+                </div>
+            </div>
+            <!-- 总营收（元） -->
+            <div class="stat-card">
+                <div class="stat-icon icon-revenue">&#128176;</div>
+                <div class="stat-info">
+                    <div class="stat-num" id="stat-revenue">0</div>
+                    <div class="stat-label">总营收（元）</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 图表区域：左右两列，柱状图 + 折线图并排 -->
+        <div class="charts-row">
+            <!-- 柱状图：各图书类别销售数量对比 -->
+            <div class="chart-panel">
+                <div class="chart-title">各图书类别销售数量对比</div>
+                <!-- Chart.js 使用 canvas 元素渲染图表 -->
+                <div class="chart-container">
+                    <canvas id="bar-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- 折线图：近7日订单状态趋势 -->
+            <div class="chart-panel">
+                <div class="chart-title">近7日订单状态趋势</div>
+                <div class="chart-container">
+                    <canvas id="line-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部：最新订单快捷列表 -->
+        <div class="bottom-section">
+            <div class="bottom-title">最新订单</div>
+            <div style="overflow-x:auto;">
+                <table id="recent-table">
+                    <thead>
+                        <tr>
+                            <th>订单编号</th>
+                            <th>图书名称</th>
+                            <th>用户名</th>
+                            <th>数量</th>
+                            <th>总价</th>
+                            <th>状态</th>
+                            <th>下单时间</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- JS 动态渲染最近5条订单 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ==================== 数据流概览 ====================
+         *
+         * 【数据来源】
+         *   localStorage.orders      → 订单列表 (持久化存储, 浏览器关闭后保留)
+         *   localStorage.users       → 用户列表 (持久化存储)
+         *   sessionStorage.categories → 图书类别 (会话级存储, 关闭标签页即清除)
+         *
+         * 【数据流向】
+         *   读取原始数据 → 统计计算 → 更新 DOM / 渲染图表
+         *
+         * 【渲染顺序】
+         *   1. 统计卡片 (图书总数 / 订单总数 / 用户数 / 总营收)
+         *   2. 柱状图 (各图书类别销量对比，基于书名关键词匹配分类)
+         *   3. 折线图 (近7日订单状态趋势，按日期 + 状态聚合)
+         *   4. 底部表格 (最近5条订单，按日期倒序)
+         *
+         * 【注意事项】
+         *   - demo/fallback 演示数据仅在真实数据为空时使用，仅用于视觉效果展示
+         *   - 类别匹配基于书名关键词子串匹配，不可靠（详见 TODO 注释）
+         *   - Chart.js 实例保存在 window 对象上，以便在页面重新渲染时先销毁旧实例
+         *   - 所有 storage 读取操作均包裹 try/catch，防止损坏数据导致页面崩溃
+         */
+
+        $(function () {
+            // ==================== 缓存 jQuery 选择器 ====================
+            // 将频繁使用的 DOM 引用缓存为变量，避免重复查询
+            const $statBooks = $('#stat-books');
+            const $statOrders = $('#stat-orders');
+            const $statUsers = $('#stat-users');
+            const $statRevenue = $('#stat-revenue');
+            const $recentTbody = $('#recent-table tbody');
+
+            // ==================== 数据读取 (带 try/catch 防护) ====================
+
+            /**
+             * 从 localStorage 读取订单数据
+             * 若数据不存在或 JSON 解析失败，则降级为空数组
+             */
+            let orders;
+            try {
+                const rawOrders = localStorage.getItem('orders');
+                orders = rawOrders ? JSON.parse(rawOrders) : [];
+            } catch (e) {
+                console.warn('读取 orders 数据失败，将使用空数组:', e);
+                orders = [];
+            }
+
+            /**
+             * 从 localStorage 读取用户数据
+             * 若数据不存在或 JSON 解析失败，则降级为空数组
+             */
+            let users;
+            try {
+                const rawUsers = localStorage.getItem('users');
+                users = rawUsers ? JSON.parse(rawUsers) : [];
+            } catch (e) {
+                console.warn('读取 users 数据失败，将使用空数组:', e);
+                users = [];
+            }
+
+            /**
+             * 从 sessionStorage 读取图书类别
+             * sessionStorage 在关闭标签页后自动清除，适合临时会话数据
+             */
+            let categories;
+            try {
+                const rawCategories = sessionStorage.getItem('categories');
+                categories = rawCategories ? JSON.parse(rawCategories) : [];
+            } catch (e) {
+                console.warn('读取 categories 数据失败，将使用空数组:', e);
+                categories = [];
+            }
+
+            // 用订单中的唯一图书名统计图书种类数
+            // 遍历订单，收集所有出现过的不同 bookTitle
+            const allBookTitles = [];
+            orders.forEach(function (o) {
+                if (allBookTitles.indexOf(o.bookTitle) === -1) {
+                    allBookTitles.push(o.bookTitle);
+                }
+            });
+
+            // ==================== 统计卡片计算 ====================
+
+            /**
+             * 图书总数：订单中出现过的唯一图书名数量
+             * 注意：这统计的是实际被订购过的图书种类，而非库存中的全部图书
+             */
+            const bookCount = allBookTitles.length;
+
+            /**
+             * 订单总数：所有订单的数量
+             */
+            const orderCount = orders.length;
+
+            /**
+             * 注册用户数：localStorage 中 users 数组的长度
+             */
+            const userCount = users.length;
+
+            /**
+             * 总营收（元）
+             * 营收统计规则：仅 "已完成 (completed)" 和 "已发货 (shipped)" 的订单计入营收
+             * - "待处理 (pending)" 尚未成交，不计入
+             * - "已取消 (cancelled)" 交易失败，不计入
+             * 对符合状态的订单累加其 totalPrice 字段
+             */
+            const totalRevenue = orders.reduce(function (sum, o) {
+                if (o.status === 'completed' || o.status === 'shipped') {
+                    return sum + parseFloat(o.totalPrice);
+                }
+                return sum;
+            }, 0);
+
+            // 将统计结果写入卡片 DOM
+            $statBooks.text(bookCount);
+            $statOrders.text(orderCount);
+            $statUsers.text(userCount);
+            $statRevenue.text(totalRevenue.toFixed(2));
+
+            // ==================== 销毁旧 Chart.js 实例 ====================
+            // 如果页面因为数据更新等原因重新渲染此脚本，
+            // 必须先销毁已存在的 Chart 实例，避免 canvas 残留和内存泄漏
+            if (window.barChart) {
+                window.barChart.destroy();
+                window.barChart = null;
+            }
+            if (window.lineChart) {
+                window.lineChart.destroy();
+                window.lineChart = null;
+            }
+
+            // ==================== 柱状图：各图书类别销售数量对比 ====================
+
+            /**
+             * 柱状图数据说明：
+             * X 轴 → 4 个图书类别（计算机 / 文学 / 历史 / 化学）
+             * Y 轴 → 销售数量（本）
+             * 每个柱子代表该类别的订单总销量（各订单 quantity 求和）
+             *
+             * 分类逻辑：遍历订单的 bookTitle，用关键词子串匹配归类
+             * TODO: 当前基于书名关键词子串匹配的归类方式非常脆弱。
+             *       例如 "计算机网络" 同时包含 "计算机" 和 "网络" 两个关键词，
+             *       但实际只归入计算机类。建议改进为：
+             *       1) 在数据源中为每本图书增加 categoryId 字段
+             *       2) 通过 categoryId 与 categories 表精确关联
+             *       3) 避免依赖书名中的自然语言关键词进行匹配
+             */
+            (function () {
+                // 定义 4 个类别的中文名称，用 const 声明（引用不变）
+                const categoryNames = ['计算机', '文学', '历史', '化学'];
+
+                // 初始化每个类别的销量数组，与上面 4 个类别一一对应
+                const categorySales = [0, 0, 0, 0]; // [计算机销量, 文学销量, 历史销量, 化学销量]
+
+                // 遍历所有订单，按书名关键词归类并累加销售量
+                orders.forEach(function (order) {
+                    const title = order.bookTitle;
+                    // 计算机类关键词匹配：涵盖主流技术方向
+                    if (title.indexOf('计算机') !== -1 || title.indexOf('算法') !== -1 || title.indexOf('编程') !== -1
+                        || title.indexOf('Java') !== -1 || title.indexOf('Python') !== -1 || title.indexOf('设计模式') !== -1
+                        || title.indexOf('数据结构') !== -1 || title.indexOf('网络') !== -1 || title.indexOf('操作系统') !== -1
+                        || title.indexOf('编译') !== -1 || title.indexOf('人工智能') !== -1 || title.indexOf('网络安全') !== -1) {
+                        categorySales[0] += order.quantity;
+                    } else if (title.indexOf('文学') !== -1 || title.indexOf('小说') !== -1 || title.indexOf('散文') !== -1) {
+                        // 文学类关键词匹配
+                        categorySales[1] += order.quantity;
+                    } else if (title.indexOf('历史') !== -1) {
+                        // 历史类关键词匹配
+                        categorySales[2] += order.quantity;
+                    } else if (title.indexOf('化学') !== -1) {
+                        // 化学类关键词匹配
+                        categorySales[3] += order.quantity;
+                    }
+                });
+
+                /**
+                 * 兜底演示数据填充
+                 * 当真实订单数据不足以展示图表效果时（如某个类别销量为 0），
+                 * 填入演示数值以避免图表过于空旷。这些演示值仅用于视觉效果，
+                 * 不代表真实业务数据。
+                 */
+                if (categorySales[1] === 0) categorySales[1] = 3;  // 文学类兜底演示值
+                if (categorySales[3] === 0) categorySales[3] = 2;  // 化学类兜底演示值
+
+                // 获取 canvas 元素的 2D 渲染上下文
+                const ctx = document.getElementById('bar-chart').getContext('2d');
+
+                /**
+                 * 创建 Chart.js 柱状图实例
+                 * 将实例保存到 window.barChart，便于后续销毁重建
+                 *
+                 * 配置要点：
+                 * - type: 'bar' 柱状图
+                 * - responsive: true 响应式缩放
+                 * - maintainAspectRatio: false 填满容器高度
+                 * - 每根柱子独立颜色，悬停时颜色加深
+                 * - 柱子顶部圆角 (borderRadius: 6)
+                 * - Y轴从0开始，步长为1，仅显示整数
+                 * - 入场动画 1000ms，缓动函数 easeOutBounce
+                 */
+                window.barChart = new Chart(ctx, {
+                    type: 'bar', // 柱状图
+                    data: {
+                        labels: categoryNames, // X 轴标签：4 个图书类别名称
+                        datasets: [{
+                            label: '销量（本）',
+                            data: categorySales, // Y 轴数据：每个类别的销售总量
+                            // 每根柱子单独的颜色（RGBA，含透明度）
+                            backgroundColor: [
+                                'rgba(52, 152, 219, 0.8)',  // 计算机 → 蓝色
+                                'rgba(39, 174, 96, 0.8)',   // 文学   → 绿色
+                                'rgba(243, 156, 18, 0.8)',  // 历史   → 橙色
+                                'rgba(155, 89, 182, 0.8)'   // 化学   → 紫色
+                            ],
+                            // 鼠标悬停时颜色加深（降低透明度 + 调暗色调）
+                            hoverBackgroundColor: [
+                                'rgba(41, 128, 185, 0.9)',
+                                'rgba(30, 132, 73, 0.9)',
+                                'rgba(214, 137, 16, 0.9)',
+                                'rgba(125, 60, 152, 0.9)'
+                            ],
+                            borderColor: [
+                                'rgba(41, 128, 185, 1)',
+                                'rgba(30, 132, 73, 1)',
+                                'rgba(214, 137, 16, 1)',
+                                'rgba(125, 60, 152, 1)'
+                            ],
+                            borderWidth: 1,
+                            borderRadius: 6,       // 柱子顶部圆角半径
+                            borderSkipped: false,   // 四边都绘制边框，配合 borderRadius 实现四角圆角
+                            maxBarThickness: 60     // 柱子最大宽度限制（px），防止柱子过宽
+                        }]
+                    },
+                    options: {
+                        responsive: true,           // 响应式：随容器大小自动缩放
+                        maintainAspectRatio: false, // 不强制保持宽高比，填满 .chart-container 容器
+                        plugins: {
+                            // 图例：隐藏，因为只有一组数据，不需要图例说明
+                            legend: { display: false },
+                            // 提示框：鼠标悬停时显示销量数值
+                            tooltip: {
+                                callbacks: {
+                                    label: function (context) {
+                                        return '销售数量：' + context.raw + ' 本';
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            // Y 轴（纵轴）配置：显示销量数值
+                            y: {
+                                beginAtZero: true,   // Y 轴从 0 开始，避免视觉误导
+                                title: {
+                                    display: true,
+                                    text: '销量（本）',
+                                    color: '#888'
+                                },
+                                ticks: {
+                                    stepSize: 1,     // 刻度步长为 1，确保只显示整数值
+                                    color: '#888'
+                                },
+                                grid: {
+                                    color: '#f0f0f0' // 网格线浅灰色，不干扰数据阅读
+                                }
+                            },
+                            // X 轴（横轴）配置：显示类别名称
+                            x: {
+                                ticks: {
+                                    color: '#555',
+                                    font: { size: 13 }
+                                },
+                                grid: { display: false } // 隐藏 X 轴网格线，保持图表简洁
+                            }
+                        },
+                        // 入场动画配置
+                        animation: {
+                            duration: 1000,          // 动画持续时间 1000ms
+                            easing: 'easeOutBounce'  // 缓动函数：弹性反弹效果
+                        }
+                    }
+                });
+            })();
+
+            // ==================== 折线图：近7日订单状态趋势 ====================
+
+            /**
+             * 折线图数据说明：
+             * X 轴 → 最近 7 天的日期
+             * 4 条折线 → 待处理 / 已发货 / 已完成 / 已取消 每日的数量
+             * Y 轴 → 订单数量（笔）
+             *
+             * 数据聚合逻辑：
+             * 1. 生成最近 7 天的日期数组 (YYYY-MM-DD 格式)
+             * 2. 为每一天维护 4 个状态的计数器，初始为 0
+             * 3. 遍历订单，将 orderDate 与日期数组逐天匹配（取前10位比较）
+             * 4. 匹配成功则根据 order.status 累加对应计数器
+             * 5. 若 7 天内无任何匹配数据，使用预设演示数据填充
+             */
+            (function () {
+                /**
+                 * 生成最近 7 天的日期数组
+                 * 从 6 天前开始，到今天的日期，按 YYYY-MM-DD 格式化
+                 */
+                const dates = [];
+                const today = new Date();
+                for (let i = 6; i >= 0; i--) {
+                    const d = new Date(today);
+                    d.setDate(d.getDate() - i);
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    dates.push(d.getFullYear() + '-' + month + '-' + day);
+                }
+
+                // 每天各状态的订单数量，初始全部为 0
+                // 使用 let 声明，因为在 allZero 兜底分支中会被重新赋值
+                let pendingData   = [0, 0, 0, 0, 0, 0, 0]; // 待处理
+                let shippedData   = [0, 0, 0, 0, 0, 0, 0]; // 已发货
+                let completedData = [0, 0, 0, 0, 0, 0, 0]; // 已完成
+                let cancelledData = [0, 0, 0, 0, 0, 0, 0]; // 已取消
+
+                /**
+                 * 遍历订单，按日期前缀匹配归类到对应天
+                 * order.orderDate 格式示例："2026-05-20 10:30:00"
+                 * 取前 10 位 "2026-05-20" 与日期数组中的 YYYY-MM-DD 比较
+                 */
+                orders.forEach(function (order) {
+                    let dateIndex = -1;
+                    for (let i = 0; i < dates.length; i++) {
+                        // 使用 indexOf 做前缀匹配：检查 orderDate 是否以 dates[i] 开头
+                        if (order.orderDate && order.orderDate.indexOf(dates[i]) === 0) {
+                            dateIndex = i;
+                            break;
+                        }
+                    }
+                    // 超出最近 7 天范围的订单忽略不统计
+                    if (dateIndex === -1) return;
+
+                    // 根据订单状态累加到对应数组的对应天
+                    switch (order.status) {
+                        case 'pending':   pendingData[dateIndex]++;   break;
+                        case 'shipped':   shippedData[dateIndex]++;   break;
+                        case 'completed': completedData[dateIndex]++; break;
+                        case 'cancelled': cancelledData[dateIndex]++; break;
+                    }
+                });
+
+                /**
+                 * 检查是否所有天的所有状态数据都为 0
+                 * 如果为真，说明订单日期均不在最近 7 天范围内（或根本没有订单数据）
+                 * 此时使用预设的演示数据填充，确保图表有内容可展示
+                 *
+                 * 注意：演示数据中的日期使用 MM/DD 格式，仅为视觉演示，
+                 * 不代表实际业务数据，在生产环境中应移除或替换为真实数据
+                 */
+                const allZero = pendingData.every(function (v) { return v === 0; }) &&
+                    shippedData.every(function (v) { return v === 0; }) &&
+                    completedData.every(function (v) { return v === 0; }) &&
+                    cancelledData.every(function (v) { return v === 0; });
+
+                // 演示数据：此处显式声明 let datesForChart 避免与 const dates 冲突
+                let datesForChart;
+                if (allZero) {
+                    // 使用演示数据替换各状态数组
+                    pendingData   = [1, 2, 1, 3, 1, 2, 0];
+                    shippedData   = [0, 1, 0, 1, 2, 1, 1];
+                    completedData = [0, 0, 1, 0, 1, 0, 2];
+                    cancelledData = [0, 0, 0, 1, 0, 0, 0];
+                    datesForChart = ['05/17', '05/18', '05/19', '05/20', '05/21', '05/22', '05/23'];
+                } else {
+                    datesForChart = dates;
+                }
+
+                // 获取 canvas 元素的 2D 渲染上下文
+                const ctx = document.getElementById('line-chart').getContext('2d');
+
+                /**
+                 * 创建 Chart.js 折线图实例
+                 * 将实例保存到 window.lineChart，便于后续销毁重建
+                 *
+                 * 配置要点：
+                 * - 4 条折线分别代表 4 种订单状态，用不同颜色和点样式区分
+                 * - interaction.mode: 'index' 鼠标悬停时显示该 X 位置所有折线的值
+                 * - 已取消折线使用虚线 (borderDash) 以视觉区分
+                 * - 图例显示在顶部，可点击切换各折线的显示/隐藏
+                 * - 入场动画 1200ms，缓动函数 easeOutQuart
+                 */
+                window.lineChart = new Chart(ctx, {
+                    type: 'line', // 折线图
+                    data: {
+                        labels: datesForChart, // X 轴：日期标签
+                        datasets: [
+                            {
+                                label: '待处理',
+                                data: pendingData,
+                                borderColor: '#f39c12',               // 橙色边框
+                                backgroundColor: 'rgba(243, 156, 18, 0.1)', // 半透明橙色填充
+                                borderWidth: 3,
+                                pointRadius: 5,                       // 数据点半径
+                                pointBackgroundColor: '#f39c12',      // 数据点填充色
+                                tension: 0.4,                         // 曲线平滑度（0=直线，1=最大弯曲）
+                                fill: true                            // 填充曲线下方区域
+                            },
+                            {
+                                label: '已发货',
+                                data: shippedData,
+                                borderColor: '#3498db',               // 蓝色边框
+                                backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                                borderWidth: 3,
+                                pointRadius: 5,
+                                pointBackgroundColor: '#3498db',
+                                pointStyle: 'rectRounded',            // 圆角方形数据点，用于区分各折线
+                                tension: 0.4,
+                                fill: true
+                            },
+                            {
+                                label: '已完成',
+                                data: completedData,
+                                borderColor: '#27ae60',               // 绿色边框
+                                backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                                borderWidth: 3,
+                                pointRadius: 5,
+                                pointBackgroundColor: '#27ae60',
+                                pointStyle: 'triangle',               // 三角形数据点
+                                tension: 0.4,
+                                fill: true
+                            },
+                            {
+                                label: '已取消',
+                                data: cancelledData,
+                                borderColor: '#e74c3c',               // 红色边框
+                                backgroundColor: 'rgba(231, 76, 60, 0.05)',
+                                borderWidth: 2,
+                                borderDash: [6, 3],                   // 虚线样式：6px 实线 + 3px 空白
+                                pointRadius: 4,
+                                pointBackgroundColor: '#e74c3c',
+                                pointStyle: 'circle',                 // 圆形数据点
+                                tension: 0.4,
+                                fill: true
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        // 交互配置：鼠标靠近时同时显示该 X 位置所有折线的数据
+                        interaction: {
+                            mode: 'index',    // 按索引匹配，同一天的所有折线值一起显示
+                            intersect: false  // 不需要精确相交才触发，靠近即触发
+                        },
+                        plugins: {
+                            // 图例：显示在顶部，点击可切换各折线的显示/隐藏
+                            legend: {
+                                position: 'top',
+                                labels: {
+                                    usePointStyle: true, // 图例使用数据点的形状样式（圆、三角等）
+                                    padding: 20,
+                                    color: '#555',
+                                    font: { size: 12 }
+                                }
+                            },
+                            // 提示框：鼠标悬停时显示具体数值
+                            tooltip: {
+                                callbacks: {
+                                    label: function (context) {
+                                        return context.dataset.label + '：' + context.raw + ' 笔';
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            // Y 轴（纵轴）配置
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: '订单量（笔）',
+                                    color: '#888'
+                                },
+                                ticks: {
+                                    stepSize: 1,    // 整数刻度，不显示小数
+                                    color: '#888'
+                                },
+                                grid: { color: '#f0f0f0' }
+                            },
+                            // X 轴（横轴）配置
+                            x: {
+                                ticks: { color: '#888' },
+                                grid: { display: false } // 隐藏 X 轴网格线
+                            }
+                        },
+                        // 入场动画配置
+                        animation: {
+                            duration: 1200,           // 动画持续时间 1200ms
+                            easing: 'easeOutQuart'    // 缓动函数：平滑减速
+                        }
+                    }
+                });
+            })();
+
+            // ==================== 底部表格：最新 5 条订单 ====================
+
+            /**
+             * 渲染最近订单表格
+             *
+             * 数据处理流程：
+             * 1. 深拷贝订单数组（slice），避免 sort 修改原数组
+             * 2. 按 orderDate 字符串倒序排列（最新的在前）
+             * 3. 取前 5 条展示
+             * 4. 用状态映射表将英文状态转为中文显示
+             * 5. 动态创建 <tr> 行并追加到 tbody
+             *
+             * 若订单列表为空，显示 "暂无订单" 占位提示
+             */
+            (function () {
+                // 深拷贝订单数组后按日期倒序排列（最新订单在前）
+                // slice() 创建浅拷贝，避免 sort 修改原始 orders 数组
+                const sorted = orders.slice().sort(function (a, b) {
+                    // localeCompare 按字符串字典序比较日期，格式 "YYYY-MM-DD HH:mm:ss" 可直接比较
+                    return b.orderDate.localeCompare(a.orderDate);
+                });
+                // 取排序后的前 5 条记录
+                const recent = sorted.slice(0, 5);
+
+                // 订单状态中英文映射表
+                const statusMap = {
+                    'pending': '待处理',
+                    'shipped': '已发货',
+                    'completed': '已完成',
+                    'cancelled': '已取消'
+                };
+                // 订单状态对应的 CSS 类名，用于样式区分
+                const statusClassMap = {
+                    'pending': 'status-pending',
+                    'shipped': 'status-shipped',
+                    'completed': 'status-completed',
+                    'cancelled': 'status-cancelled'
+                };
+
+                // 若无订单数据，显示占位提示
+                if (recent.length === 0) {
+                    $recentTbody.append('<tr><td colspan="7" style="text-align:center;color:#aaa;padding:20px;">暂无订单</td></tr>');
+                    return;
+                }
+
+                // 遍历最近订单，逐条构建表格行
+                recent.forEach(function (order) {
+                    const row = $('<tr>');
+                    row.append($('<td>').text(order.orderNo));
+                    row.append($('<td>').text(order.bookTitle));
+                    row.append($('<td>').text(order.username));
+                    row.append($('<td>').text(order.quantity));
+                    row.append($('<td>').text('¥' + parseFloat(order.totalPrice).toFixed(2)));
+                    // 状态列：使用徽章样式展示，根据状态应用不同的 CSS 类
+                    row.append($('<td>').html(
+                        '<span class="status-badge ' + (statusClassMap[order.status] || '') + '">'
+                        + (statusMap[order.status] || order.status) + '</span>'
+                    ));
+                    row.append($('<td>').text(order.orderDate));
+                    $recentTbody.append(row);
+                });
+            })();
+        });
+    </script>
+</body>
+</html>

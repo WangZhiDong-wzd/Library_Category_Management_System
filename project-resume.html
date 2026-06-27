@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>项目简历 · 在线书城后台管理系统</title>
+  <style>
+    /* ===== 全局重置 & 字体 ===== */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: #f0f2f5;
+      color: #2c3e50;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ===== 顶部横幅 ===== */
+    .hero {
+      background: linear-gradient(135deg, #1a2a6c 0%, #2d4373 40%, #4a6fa5 100%);
+      color: #fff;
+      padding: 60px 20px 50px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      right: 0;
+      height: 40px;
+      background: #f0f2f5;
+      clip-path: ellipse(70% 100% at 50% 100%);
+    }
+
+    .hero .badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,0.25);
+      padding: 4px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+    }
+
+    .hero h1 {
+      font-size: 42px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+    }
+
+    .hero .subtitle {
+      font-size: 18px;
+      opacity: 0.85;
+      font-weight: 300;
+    }
+
+    .hero .tech-tags {
+      margin-top: 20px;
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .hero .tech-tags span {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      padding: 4px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    /* ===== 容器 ===== */
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    /* ===== 章节 ===== */
+    .section {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      padding: 30px 32px;
+      margin: 24px auto;
+      max-width: 1000px;
+      transition: box-shadow 0.2s;
+    }
+
+    .section:hover {
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1a2a6c;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #eef1f5;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-title .icon { font-size: 24px; }
+
+    /* ===== 项目概览 ===== */
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px;
+    }
+
+    .overview-item {
+      background: #f7f8fc;
+      border-radius: 10px;
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .overview-item .emoji {
+      font-size: 28px;
+      width: 44px;
+      height: 44px;
+      background: #fff;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+      flex-shrink: 0;
+    }
+
+    .overview-item .info .label {
+      font-size: 12px;
+      color: #888;
+    }
+    .overview-item .info .value {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    /* ===== 功能模块网格 ===== */
+    .module-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+
+    .module-card {
+      background: #f7f8fc;
+      border-radius: 10px;
+      padding: 20px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .module-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+    }
+
+    .module-card .card-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    .module-card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1a2a6c;
+      margin-bottom: 6px;
+    }
+
+    .module-card p {
+      font-size: 13px;
+      color: #666;
+      line-height: 1.6;
+    }
+
+    /* ===== 架构树 ===== */
+    .arch-tree {
+      background: #1e2a3a;
+      color: #e0e8f0;
+      border-radius: 10px;
+      padding: 20px 24px;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 13px;
+      line-height: 2;
+      overflow-x: auto;
+    }
+
+    .arch-tree .folder { color: #ffd866; }
+    .arch-tree .file   { color: #a8d8ea; }
+    .arch-tree .dim    { color: #6a7a8a; }
+    .arch-tree .highlight { color: #7ec699; font-weight: 600; }
+
+    /* ===== 技术栈 ===== */
+    .tech-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+
+    .tech-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #f7f8fc;
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+
+    .tech-item .logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .tech-item .name {
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .tech-item .desc {
+      font-size: 12px;
+      color: #888;
+    }
+
+    /* ===== 表格 ===== */
+    .styled-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .styled-table th, .styled-table td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid #eef1f5;
+    }
+
+    .styled-table th {
+      background: #f7f8fc;
+      font-weight: 600;
+      color: #1a2a6c;
+      font-size: 13px;
+    }
+
+    .styled-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* ===== 数据流 ===== */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 10px 0;
+      font-size: 14px;
+    }
+
+    .flow-diagram .node {
+      background: #1a2a6c;
+      color: #fff;
+      padding: 6px 16px;
+      border-radius: 6px;
+      font-weight: 500;
+      font-size: 13px;
+    }
+
+    .flow-diagram .node.green  { background: #27ae60; }
+    .flow-diagram .node.blue   { background: #2980b9; }
+    .flow-diagram .node.orange { background: #e67e22; }
+    .flow-diagram .node.purple { background: #8e44ad; }
+    .flow-diagram .node.dark   { background: #2c3e50; }
+
+    .flow-diagram .arrow {
+      font-size: 18px;
+      color: #bbb;
+    }
+
+    /* ===== 亮点列表 ===== */
+    .highlight-list {
+      list-style: none;
+      display: grid;
+      gap: 12px;
+    }
+
+    .highlight-list li {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 12px 16px;
+      background: #f7f8fc;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .highlight-list li .num {
+      width: 26px;
+      height: 26px;
+      background: #1a2a6c;
+      color: #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 600;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* ===== 底部 ===== */
+    .footer {
+      text-align: center;
+      padding: 30px 20px;
+      color: #999;
+      font-size: 13px;
+    }
+
+    /* ===== 响应式 ===== */
+    @media (max-width: 640px) {
+      .hero h1 { font-size: 28px; }
+      .section { padding: 20px 18px; }
+      .overview-grid { grid-template-columns: 1fr 1fr; }
+      .arch-tree { font-size: 11px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== 顶部横幅 ==================== -->
+  <header class="hero">
+    <div class="badge">📖 项目简历</div>
+    <h1>在线书城后台管理系统</h1>
+    <p class="subtitle">Online Bookstore Admin Dashboard &mdash; 纯前端 SPA</p>
+    <div class="tech-tags">
+      <span>jQuery 3.7.1</span>
+      <span>Bootstrap 4.6.2</span>
+      <span>Chart.js 4.4.0</span>
+      <span>Font Awesome 6</span>
+      <span>Web Storage API</span>
+    </div>
+  </header>
+
+  <!-- ==================== 项目概览 ==================== -->
+  <div class="container">
+    <section class="section">
+      <div class="section-title">
+        <span class="icon">📌</span> 项目概览
+      </div>
+      <div class="overview-grid">
+        <div class="overview-item">
+          <div class="emoji">📂</div>
+          <div class="info">
+            <div class="label">项目类型</div>
+            <div class="value">纯前端单页应用 (SPA)</div>
+          </div>
+        </div>
+        <div class="overview-item">
+          <div class="emoji">📄</div>
+          <div class="info">
+            <div class="label">功能页面</div>
+            <div class="value">12 个 HTML 页面</div>
+          </div>
+        </div>
+        <div class="overview-item">
+          <div class="emoji">🎨</div>
+          <div class="info">
+            <div class="label">样式文件</div>
+            <div class="value">10+ 独立 CSS</div>
+          </div>
+        </div>
+        <div class="overview-item">
+          <div class="emoji">💾</div>
+          <div class="info">
+            <div class="label">数据存储</div>
+            <div class="value">LocalStorage + SessionStorage</div>
+          </div>
+        </div>
+        <div class="overview-item">
+          <div class="emoji">🔌</div>
+          <div class="info">
+            <div class="label">后端依赖</div>
+            <div class="value">❌ 零依赖，开箱即用</div>
+          </div>
+        </div>
+        <div class="overview-item">
+          <div class="emoji">📐</div>
+          <div class="info">
+            <div class="label">设计模式</div>
+            <div class="value">iframe-SPA · 手风琴菜单</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 功能模块 ==================== -->
+    <section class="section">
+      <div class="section-title">
+        <span class="icon">🧩</span> 核心功能模块
+      </div>
+      <div class="module-grid">
+        <div class="module-card">
+          <div class="card-icon">🔐</div>
+          <h3>登录系统</h3>
+          <p>用户名 / 手机号双模式登录 · 表单实时校验 · 密码可见切换 · 加载态动画</p>
+        </div>
+        <div class="module-card">
+          <div class="card-icon">📊</div>
+          <h3>数据分析仪表盘</h3>
+          <p>统计卡片 · 类别销量柱状图 · 7 日订单趋势折线图 · 最新订单列表</p>
+        </div>
+        <div class="module-card">
+          <div class="card-icon">📚</div>
+          <h3>图书管理</h3>
+          <p>图书 CRUD · ISBN / 书名搜索 · 图书类别管理（4 大分类）</p>
+        </div>
+        <div class="module-card">
+          <div class="card-icon">👤</div>
+          <h3>用户管理</h3>
+          <p>用户 CRUD · 用户名 / 邮箱搜索 · 等级管理（普通 / 高级 / VIP）</p>
+        </div>
+        <div class="module-card">
+          <div class="card-icon">📦</div>
+          <h3>订单管理</h3>
+          <p>订单总览 · 状态筛选 · 待处理订单排序 · 加急标记 · 详情弹窗</p>
+        </div>
+        <div class="module-card">
+          <div class="card-icon">♿</div>
+          <h3>无障碍访问</h3>
+          <p>ARIA 导航标注 · 角色属性 · 实时错误播报 · 语义化 HTML</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 项目架构 ==================== -->
+    <section class="section">
+      <div class="section-title">
+        <span class="icon">🏗️</span> 项目架构
+      </div>
+      <div class="arch-tree">
+        <div><span class="folder">📁 Library_Category_Management_System/</span></div>
+        <div>  ├── <span class="highlight">login.html</span>      <span class="dim"># 登录页（双模式）</span></div>
+        <div>  ├── <span class="highlight">index.html</span>      <span class="dim"># 主框架（导航 + iframe）</span></div>
+        <div>  ├── <span class="highlight">dashboard.html</span>  <span class="dim"># 数据分析仪表盘</span></div>
+        <div>  ├── <span class="folder">📁 图书管理</span></div>
+        <div>  │   ├── book.html       <span class="dim"># 图书列表</span></div>
+        <div>  │   ├── bookAdd.html    <span class="dim"># 添加图书</span></div>
+        <div>  │   └── category.html   <span class="dim"># 类别管理</span></div>
+        <div>  ├── <span class="folder">📁 用户管理</span></div>
+        <div>  │   ├── user.html       <span class="dim"># 用户列表</span></div>
+        <div>  │   ├── userAdd.html    <span class="dim"># 添加用户</span></div>
+        <div>  │   ├── userEdit.html   <span class="dim"># 编辑用户</span></div>
+        <div>  │   └── grade.html      <span class="dim"># 等级管理</span></div>
+        <div>  ├── <span class="folder">📁 订单管理</span></div>
+        <div>  │   ├── order.html          <span class="dim"># 订单总览</span></div>
+        <div>  │   └── orderPending.html   <span class="dim"># 待处理订单</span></div>
+        <div>  ├── <span class="folder">📁 css/</span>     <span class="dim"> 各页面独立样式</span></div>
+        <div>  ├── <span class="folder">📁 js/</span>      <span class="dim"> jQuery + jQueryUI + Chart.js</span></div>
+        <div>  ├── <span class="folder">📁 data/</span>    <span class="dim"> JSON 数据文件</span></div>
+        <div>  └── <span class="folder">📁 bootstrap-4.6.2-dist/</span></div>
+      </div>
+    </section>
+
+    <!-- ==================== 数据流架构 ==================== -->
+    <section class="section">
+      <div class="section-title">
+        <span class="icon">🔄</span> 数据流与存储策略
+      </div>
+
+      <div class="flow-diagram">
+        <span class="node">用户操作</span>
+        <span class="arrow">→</span>
+        <span class="node blue">jQuery 事件</span>
+        <span class="arrow">→</span>
+        <span class="node green">业务逻辑</span>
+        <span class="arrow">→</span>
+        <span class="node orange">CRUD 操作</span>
+        <span class="arrow">→</span>
+        <span class="node purple">Web Storage</span>
+        <span class="arrow">→</span>
+        <span class="node dark">DOM 刷新</span>
+      </div>
+
+      <table class="styled-table" style="margin-top: 16px;">
+        <thead>
+          <tr><th>数据类型</th><th>存储方式</th><th>生命周期</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>📚 图书类别</td>
+            <td><code>sessionStorage</code></td>
+            <td>会话级</td>
+            <td>关闭标签页自动清除，避免错误配置持久化</td>
+          </tr>
+          <tr>
+            <td>🏅 用户等级</td>
+            <td><code>sessionStorage</code></td>
+            <td>会话级</td>
+            <td>系统配置类数据，每次会话使用默认值重置</td>
+          </tr>
+          <tr>
+            <td>📦 订单数据</td>
+            <td><code>localStorage</code></td>
+            <td>持久化</td>
+            <td>核心业务数据，跨浏览器会话保留</td>
+          </tr>
+          <tr>
+            <td>👤 用户数据</td>
+            <td><code>localStorage</code></td>
+            <td>持久化</td>
+            <td>用户账号信息，持久保留不丢失</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ==================== 技术栈 ==================== -->
+    <section class="section">
+      <div class="section-title">
+        <span class="icon">⚙️</span> 技术栈详情
+      </div>
+      <div class="tech-grid">
+        <div class="tech-item">
+          <div class="logo" style="background:#0769ad;">JQ</div>
+          <div>
+            <div class="name">jQuery 3.7.1</div>
+            <div class="desc">DOM 操作 · 事件处理 · Ajax</div>
+          </div>
+        </div>
+        <div class="tech-item">
+          <div class="logo" style="background:#563d7c;">BS</div>
+          <div>
+            <div class="name">Bootstrap 4.6.2</div>
+            <div class="desc">响应式栅格 · 组件库 · 工具类</div>
+          </div>
+        </div>
+        <div class="tech-item">
+          <div class="logo" style="background:#f7df1e;color:#333;">UI</div>
+          <div>
+            <div class="name">jQuery UI 1.12.1</div>
+            <div class="desc">对话框 · 自动补全</div>
+          </div>
+        </div>
+        <div class="tech-item">
+          <div class="logo" style="background:#e74c3c;">Ch</div>
+          <div>
+            <div class="name">Chart.js 4.4.0</div>
+            <div class="desc">柱状图 · 折线图 · 动画</div>
+          </div>
+        </div>
+        <div class="tech-item">
+          <div class="logo" style="background:#528dd7;">FA</div>
+          <div>
+            <div class="name">Font Awesome 6</div>
+            <div class="desc">图标字体库</div>
+          </div>
+        </div>
+        <div class="tech-item">
+          <div class="logo" style="background:#2c3e50;">WS</div>
+          <div>
+            <div class="name">Web Storage API</div>
+            <div class="desc">localStorage + sessionStorage</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 亮点特性 ==================== -->
+    <section class="section">
+      <div class="section-title">
+        <span class="icon">✨</span> 技术亮点
+      </div>
+      <ul class="highlight-list">
+        <li>
+          <span class="num">1</span>
+          <div><strong>分层数据持久化策略</strong> — 配置类数据（类别 / 等级）使用 sessionStorage，避免修改后持久化污染；业务数据（订单 / 用户）使用 localStorage，确保关闭浏览器后数据不丢失。</div>
+        </li>
+        <li>
+          <span class="num">2</span>
+          <div><strong>SPA 页面架构</strong> — 使用 iframe + 手风琴菜单实现单页应用效果，模块独立开发互不干扰，复用 Bootstrap 布局体系。</div>
+        </li>
+        <li>
+          <span class="num">3</span>
+          <div><strong>数据可视化</strong> — 基于 Chart.js 实现柱状图（类别销量对比）和折线图（7 日订单趋势），差异化配色 + 曲线平滑 + 入场动画，提升数据可读性。</div>
+        </li>
+        <li>
+          <span class="num">4</span>
+          <div><strong>无障碍（ARIA）支持</strong> — 菜单区域标注 role="menubar/menuitem"，标签页使用 role="tablist/tab"，表单错误使用 role="alert" 实时播报，提升辅助技术兼容性。</div>
+        </li>
+        <li>
+          <span class="num">5</span>
+          <div><strong>模块化 CSS 隔离</strong> — 每个功能页面拥有独立 CSS 文件，避免样式污染；登录页采用 CSS 变量 + 暖色书香主题，仪表盘卡片 hover 上浮动效。</div>
+        </li>
+        <li>
+          <span class="num">6</span>
+          <div><strong>完整的表单校验体系</strong> — 非空检查 · 手机号正则 · 密码最小长度 · 邮箱格式 · 用户名唯一性校验 · 实时输入清除错误状态 · 聚焦首个错误字段。</div>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ==================== 项目截图占位 ==================== -->
+    <section class="section">
+      <div class="section-title">
+        <span class="icon">📸</span> 页面预览
+      </div>
+      <div class="module-grid">
+        <div class="module-card" style="text-align:center;padding:40px 20px;background:#f0f4f8;">
+          <div style="font-size:48px;margin-bottom:10px;">🔐</div>
+          <h3>登录页面</h3>
+          <p>双模式登录 · 毛玻璃卡片 · 暖色书香主题</p>
+        </div>
+        <div class="module-card" style="text-align:center;padding:40px 20px;background:#f0f4f8;">
+          <div style="font-size:48px;margin-bottom:10px;">📊</div>
+          <h3>数据分析仪表盘</h3>
+          <p>统计卡片 · Chart.js 图表 · 最新订单表</p>
+        </div>
+        <div class="module-card" style="text-align:center;padding:40px 20px;background:#f0f4f8;">
+          <div style="font-size:48px;margin-bottom:10px;">📚</div>
+          <h3>图书 & 订单管理</h3>
+          <p>CRUD 操作 · 搜索筛选 · 状态管理</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 快速启动 ==================== -->
+    <section class="section">
+      <div class="section-title">
+        <span class="icon">🚀</span> 快速启动
+      </div>
+      <table class="styled-table">
+        <thead>
+          <tr><th>方式</th><th>命令</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>VS Code</td>
+            <td><code>右键 index.html → Open with Live Server</code></td>
+            <td>🔥 推荐，自动刷新</td>
+          </tr>
+          <tr>
+            <td>Python</td>
+            <td><code>python -m http.server 8080</code></td>
+            <td>无需安装任何依赖</td>
+          </tr>
+          <tr>
+            <td>Node.js</td>
+            <td><code>npx serve .</code></td>
+            <td>零配置静态服务器</td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="margin-top:12px;font-size:14px;color:#888;">
+        💡 启动后访问 <code>http://localhost:8080/login.html</code>，
+        输入任意用户名和密码即可登录体验！
+      </p>
+    </section>
+  </div>
+
+  <!-- ==================== 底部 ==================== -->
+  <div class="footer">
+    <p>📖 在线书城后台管理系统 · 项目简历</p>
+    <p style="margin-top:4px;font-size:12px;">Built with jQuery + Bootstrap + Chart.js · 纯前端 · 零后端依赖</p>
+  </div>
+
+</body>
+</html>

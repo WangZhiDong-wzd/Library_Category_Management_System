@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>编辑用户页面</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="bootstrap-4.6.2-dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/userAdd.css">
+    <!-- jQuery -->
+    <script src="js/jquery-3.7.1.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="bootstrap-4.6.2-dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- 页面标题 -->
+        <h1>编辑用户</h1>
+
+        <!--
+            页面级错误提示区域：
+            当 URL 中的用户 ID 无效或目标用户在 localStorage 中找不到时，
+            在此以行内提示方式展示错误信息，替代原始的 alert 弹窗。
+            这样做的好处：
+            - 不会打断用户的操作流程
+            - 屏幕阅读器可以正确读出错误内容（role="alert"）
+            - 样式可以与页面整体保持一致（使用 Bootstrap 的 alert-danger）
+        -->
+        <div id="page-error" class="alert alert-danger" role="alert" style="display:none;"></div>
+
+        <!--
+            编辑用户表单
+            - novalidate：禁用浏览器默认的 HTML5 表单验证，全部交由脚本统一处理，
+              以确保错误信息样式和定位方式一致
+            - aria-label：为屏幕阅读器提供表单用途说明
+        -->
+        <form id="user-form" aria-label="编辑用户表单" novalidate>
+            <!--
+                隐藏字段：存储用户 ID，用户不可见也不可编辑，
+                但在提交时需要携带此值以便在数组中定位目标用户
+            -->
+            <input type="hidden" id="user-id" name="id">
+
+            <label for="username">用户名:</label>
+            <input type="text" id="username" name="username" required
+                   aria-required="true" aria-describedby="username-error"
+                   autocomplete="username">
+            <!--
+                role="alert" 让屏幕阅读器在错误文本被填充时立即读出，
+                aria-describedby 将该错误信息与输入字段建立关联
+            -->
+            <span class="error" id="username-error" role="alert"></span>
+
+            <label for="email">邮箱:</label>
+            <input type="email" id="email" name="email" required
+                   aria-required="true" aria-describedby="email-error"
+                   autocomplete="email">
+            <span class="error" id="email-error" role="alert"></span>
+
+            <!--
+                可选密码字段：
+                - 如果用户想修改密码，在此输入新密码
+                - 如果留空，更新时将保持原有密码不变
+                - autocomplete="new-password" 可避免浏览器自动填入当前登录密码
+            -->
+            <label for="password">新密码（留空则保持不变）:</label>
+            <input type="password" id="password" name="password"
+                   aria-describedby="password-hint password-error"
+                   autocomplete="new-password"
+                   placeholder="留空则保持原密码不变">
+            <small id="password-hint" class="form-text text-muted">留空则保持原密码不变</small>
+            <span class="error" id="password-error" role="alert"></span>
+
+            <label for="role">角色:</label>
+            <select id="role" name="role" required
+                    aria-required="true" aria-describedby="role-error">
+                <option value="">请选择角色</option>
+                <option value="管理员">管理员</option>
+                <option value="普通用户">普通用户</option>
+            </select>
+            <span class="error" id="role-error" role="alert"></span>
+
+            <div class="form-actions" style="margin-top: 16px;">
+                <button type="submit" class="btn btn-primary">保存</button>
+                <button type="button" class="btn btn-secondary" id="btn-back">返回</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        /*
+         * ============================================================================
+         * 用户对象结构 (User Object Structure)
+         * ============================================================================
+         * 系统中所有用户数据以 JSON 数组形式存储在 localStorage 的 "users" 键下。
+         * 每个数组元素为一个用户对象，其属性如下：
+         *
+         *   {
+         *       id:       number,   // 用户唯一标识符（整数）
+         *       username: string,   // 用户名，用于登录和唯一性校验
+         *       email:    string,   // 邮箱地址
+         *       role:     string,   // 角色，取值："管理员" | "普通用户"
+         *       password: string    // (可选) 密码，旧数据可能不含此字段
+         *   }
+         *
+         * 本页面（userEdit.html）负责：
+         *   1. 从 URL 参数中读取待编辑用户的 ID
+         *   2. 在 localStorage 中查找对应记录
+         *   3. 将现有数据预填充到表单
+         *   4. 接收用户的修改并执行表单验证
+         *   5. 将更新后的数据写回 localStorage
+         *   6. 根据运行环境（iframe 或顶层窗口）导航回用户列表页
+         * ============================================================================
+         */
+
+        $(document).ready(function () {
+
+            // ========================================================================
+            // 一、缓存 jQuery 选择器
+            //    将所有需要重复使用的 DOM 查询结果存储为变量，避免每次操作时
+            //    重新遍历 DOM 树。这是一种简单但有效的性能优化手段。
+            //    命名约定：以 $ 开头表示这是一个 jQuery 对象。
+            // ========================================================================
+            const $pageError   = $('#page-error');   // 页面级错误提示容器
+            const $userForm    = $('#user-form');    // 用户编辑表单
+            const $userId      = $('#user-id');      // 隐藏的用户 ID 字段
+            const $username    = $('#username');     // 用户名输入框
+            const $email       = $('#email');        // 邮箱输入框
+            const $password    = $('#password');     // 新密码输入框（可选）
+            const $role        = $('#role');         // 角色下拉框
+            const $usernameErr = $('#username-error'); // 用户名错误提示
+            const $emailErr    = $('#email-error');    // 邮箱错误提示
+            const $passwordErr = $('#password-error'); // 密码错误提示
+            const $roleErr     = $('#role-error');     // 角色错误提示
+            const $btnBack     = $('#btn-back');       // 返回按钮
+
+            // ========================================================================
+            // 二、解析 URL 查询参数
+            //    使用浏览器内置的 URLSearchParams API 解析当前页面 URL 中
+            //    "?" 后面的查询字符串。
+            //
+            //    示例：页面地址为 userEdit.html?id=3
+            //    → window.location.search 返回 "?id=3"
+            //    → urlParams.get('id') 返回字符串 "3"
+            //    → parseInt("3", 10) 返回整数 3
+            //
+            //    第二个参数 10 指定以十进制解析，防止以 "0" 开头的字符串
+            //    被误解析为八进制（旧版浏览器的 parseInt 行为）。
+            //    如果 URL 中没有 id 参数，parseInt(undefined) 返回 NaN，
+            //    NaN 做布尔判断为 false，因此下面的 if 条件会命中。
+            // ========================================================================
+            const urlParams = new URLSearchParams(window.location.search);
+            const userId = parseInt(urlParams.get('id'), 10);
+
+            // 如果未提供有效用户 ID，显示页面级错误并隐藏表单
+            // （用户仍可通过"返回"按钮回到列表页）
+            if (!userId) {
+                $pageError.text('URL 参数错误：缺少有效的用户 ID，无法编辑用户。请从用户列表页选择要编辑的用户。').show();
+                $userForm.hide();
+                return;
+            }
+
+            // ========================================================================
+            // 三、从 localStorage 读取并查找目标用户
+            //     整个操作包裹在 try/catch 中，因为以下情况可能抛出异常：
+            //     - localStorage 不可用（浏览器隐私模式可能禁用）
+            //     - JSON 格式损坏（SyntaxError）
+            //     - Storage 配额耗尽
+            //     捕获异常后记录到控制台并向用户展示友好的错误信息，
+            //     避免整个脚本崩溃导致页面无响应。
+            // ========================================================================
+            let users = [];
+            let user = null;
+
+            try {
+                // 从 localStorage 读取 users 键对应的 JSON 字符串，
+                // 若无数据则默认使用空数组字符串 '[]'
+                const raw = localStorage.getItem('users') || '[]';
+                users = JSON.parse(raw);
+
+                // 防御性编程：确保解析结果是数组类型。
+                // 如果由于某种原因存储了一个非数组值（如单个对象），
+                // 重置为空数组以防止后续 .find() 等数组方法报错。
+                if (!Array.isArray(users)) {
+                    console.warn('localStorage 中 "users" 键的值不是数组，已重置为空数组。');
+                    users = [];
+                }
+            } catch (e) {
+                // 读取失败（如数据损坏）时记录错误详情，使用空数组回退
+                console.error('从 localStorage 读取用户数据时发生异常：', e);
+                $pageError.text('读取用户数据时发生错误，请刷新页面后重试。如果问题持续出现，请尝试清除浏览器数据。').show();
+                $userForm.hide();
+                return;
+            }
+
+            // 在用户数组中查找 ID 匹配的目标用户
+            // Array.prototype.find() 返回第一个匹配的元素，若无匹配则返回 undefined
+            user = users.find(function (u) {
+                return u.id === userId;
+            });
+
+            // 未找到目标用户时的处理
+            if (!user) {
+                $pageError.text(
+                    '未找到 ID 为 ' + userId + ' 的用户。该用户可能已被其他操作删除，' +
+                    '请返回用户列表页查看最新数据。'
+                ).show();
+                $userForm.hide();
+                return;
+            }
+
+            // ========================================================================
+            // 四、表单数据预填充
+            //     将查找到的用户数据回填到表单的各个输入控件中，
+            //     让用户在现有数据基础上修改，提升用户体验。
+            //
+            //     密码字段不预填充 —— 出于安全考虑，不在页面上显示已有密码。
+            //     如果用户想修改密码，直接填写新密码即可；
+            //     如果留空，保存时将保留原密码不变。
+            // ========================================================================
+            $userId.val(user.id);           // 隐藏字段：用户 ID（不可编辑）
+            $username.val(user.username);   // 用户名
+            $email.val(user.email);         // 邮箱
+            $role.val(user.role);           // 角色（下拉框自动选中匹配项）
+
+            // ========================================================================
+            // 五、表单提交事件处理
+            //     包含完整的验证流程和数据更新逻辑。
+            //     使用 .on('submit', ...) 而非 .submit(...)，
+            //     便于后续可能的动态事件绑定扩展。
+            // ========================================================================
+            $userForm.on('submit', function (e) {
+                e.preventDefault(); // 阻止浏览器默认的表单提交行为
+
+                // --------------------------------------------------------------------
+                // 5.1 清除上一次提交留下的错误提示和状态标记
+                //     - 清空所有 .error 元素的文本内容
+                //     - 移除所有字段上的 aria-invalid 属性（恢复为"有效"状态）
+                // --------------------------------------------------------------------
+                $('.error').text('');
+                $userForm.find('[aria-invalid="true"]').removeAttr('aria-invalid');
+
+                // 获取各字段的当前值
+                const newUsername = $username.val().trim();
+                const newEmail    = $email.val().trim();
+                const newPassword = $password.val(); // 密码不去除首尾空格，因为密码本身可能包含空格
+                const newRole     = $role.val();
+
+                let hasError = false;
+
+                // --------------------------------------------------------------------
+                // 5.2 用户名验证
+                //     - 规则一：不能为空
+                //     - 规则二：不能与数组中其他用户的用户名重复
+                //       （查找时排除当前用户自身，即 u.id !== userId）
+                // --------------------------------------------------------------------
+                if (!newUsername) {
+                    $usernameErr.text('用户名不能为空');
+                    $username.attr('aria-invalid', 'true');
+                    hasError = true;
+                } else {
+                    // 检查是否存在其他用户使用了相同的用户名
+                    const dupUser = users.find(function (u) {
+                        return u.username === newUsername && u.id !== userId;
+                    });
+                    if (dupUser) {
+                        $usernameErr.text('用户名 "' + newUsername + '" 已被占用，请使用其他用户名');
+                        $username.attr('aria-invalid', 'true');
+                        hasError = true;
+                    }
+                }
+
+                // --------------------------------------------------------------------
+                // 5.3 邮箱格式验证
+                //     - 正则 ^[^\s@]+@[^\s@]+\.[^\s@]+$ 匹配基本邮箱格式：
+                //       本地部分@域名.顶级域
+                //     - 不能为空
+                // --------------------------------------------------------------------
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!newEmail || !emailRegex.test(newEmail)) {
+                    $emailErr.text('请输入有效的邮箱地址');
+                    $email.attr('aria-invalid', 'true');
+                    hasError = true;
+                }
+
+                // --------------------------------------------------------------------
+                // 5.4 密码验证（可选字段）
+                //     - 如果用户填写了新密码，需要满足最低长度要求（6 位）
+                //     - 如果留空，表示"保持原密码不变"，跳过验证
+                // --------------------------------------------------------------------
+                if (newPassword.length > 0 && newPassword.length < 6) {
+                    $passwordErr.text('密码长度不能少于 6 位');
+                    $password.attr('aria-invalid', 'true');
+                    hasError = true;
+                }
+
+                // --------------------------------------------------------------------
+                // 5.5 角色验证
+                //     - 必须选择一个有效角色（不能是占位符空值）
+                // --------------------------------------------------------------------
+                if (!newRole) {
+                    $roleErr.text('请选择用户角色');
+                    $role.attr('aria-invalid', 'true');
+                    hasError = true;
+                }
+
+                // 如果任何一个验证未通过，终止提交流程
+                if (hasError) return;
+
+                // --------------------------------------------------------------------
+                // 5.6 定位用户并构建更新后的数据对象
+                //     在 users 数组中找到目标用户的索引位置，
+                //     然后创建一个包含更新后字段的新对象替换该位置。
+                //
+                //     密码处理逻辑：
+                //     - 如果用户填写了新密码 → 使用新密码
+                //     - 如果用户留空 → 保留原有密码（若存在）
+                //     - 如果用户留空且原数据也无密码 → 不设置 password 字段
+                // --------------------------------------------------------------------
+                const userIndex = users.findIndex(function (u) {
+                    return u.id === userId;
+                });
+
+                if (userIndex === -1) {
+                    // 极端情况：在填写表单期间，用户被其他标签页删除了
+                    $pageError.text('该用户在编辑过程中已被删除，请返回列表页查看。').show();
+                    $userForm.hide();
+                    return;
+                }
+
+                const updatedUser = {
+                    id: userId,
+                    username: newUsername,
+                    email: newEmail,
+                    role: newRole,
+                    // 密码：优先使用新密码；若留空则保留原有密码
+                    password: newPassword.length > 0
+                        ? newPassword
+                        : (users[userIndex].password || undefined)
+                };
+
+                // 如果最终 password 为 undefined，删除该属性以保持数据整洁
+                if (updatedUser.password === undefined) {
+                    delete updatedUser.password;
+                }
+
+                users[userIndex] = updatedUser;
+
+                // --------------------------------------------------------------------
+                // 5.7 将更新后的用户数组序列化并写入 localStorage
+                //     try/catch 保护写入操作：Storage 配额满、浏览器隐私模式等
+                //     场景可能导致写入失败。
+                // --------------------------------------------------------------------
+                try {
+                    localStorage.setItem('users', JSON.stringify(users));
+                } catch (e) {
+                    console.error('将用户数据写入 localStorage 时发生异常：', e);
+                    $pageError.text('保存失败：无法写入本地存储。请检查浏览器存储空间，或尝试关闭隐私模式后重试。').show();
+                    return;
+                }
+
+                // 保存成功后导航回用户列表页面
+                goBack();
+            });
+
+            // ========================================================================
+            // 六、返回按钮点击事件
+            //     原代码中返回按钮缺少点击处理，此处显式绑定 goBack 函数。
+            // ========================================================================
+            $btnBack.on('click', function () {
+                goBack();
+            });
+        });
+
+        // ============================================================================
+        // 七、返回用户列表页的导航函数
+        //
+        //    本系统采用 frameset 布局（由 index.html 定义），左侧为导航菜单，
+        //    右侧为主内容区（框架名称为 "main"）。在编辑/添加用户等子页面中，
+        //    需要准确导航回 user.html 用户列表页。
+        //
+        //    iframe 检测逻辑详解：
+        //
+        //      window.self
+        //        → 始终指向当前执行上下文的 Window 对象。
+        //          在顶层窗口中，它指向浏览器标签页的窗口；
+        //          在 iframe 中，它指向该 iframe 自身的窗口。
+        //
+        //      window.top
+        //        → 指向当前浏览上下文中最顶层（根）的 Window 对象，
+        //          即浏览器标签页的主窗口。
+        //
+        //      window.self !== window.top
+        //        → 如果结果为 true，说明当前页面被嵌入在 iframe 或嵌套框架中；
+        //          如果为 false，说明当前页面就是顶层窗口。
+        //
+        //    在不同环境中的导航策略：
+        //
+        //      iframe 中（self !== top）：
+        //        通过 window.parent 获取父窗口，再用 .frames['main']
+        //        定位到名为 "main" 的框架，修改其 location.href 实现
+        //        在父页面的指定框架区域内加载目标页面。
+        //        这样做可以保证用户不会脱离整体布局框架。
+        //
+        //      顶层窗口中（self === top）：
+        //        直接修改 window.location.href 进行整页跳转。
+        //        这可能发生在用户直接在新标签页中打开了本页面的 URL。
+        // ============================================================================
+        function goBack() {
+            // 判断是否运行在 iframe 中
+            if (window.self !== window.top) {
+                // 运行在 iframe 中：
+                // window.parent 是父窗口，frames['main'] 是父窗口中名为 "main" 的框架
+                // 修改该框架的 location 以在右侧主内容区加载用户列表页
+                window.parent.frames['main'].location.href = 'user.html';
+            } else {
+                // 运行在顶层窗口（如独立标签页中打开），直接跳转
+                window.location.href = 'user.html';
+            }
+        }
+    </script>
+</body>
+</html>

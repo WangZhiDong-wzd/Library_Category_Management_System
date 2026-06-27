@@ -1,0 +1,15 @@
+# VS Code
+.vscode/
+
+# Claude AI settings
+.claude/settings.local.json
+
+# OS files
+Thumbs.db
+.DS_Store
+*.swp
+*.swo
+
+# Personal documents (optional - uncomment if you don't want them in repo)
+# *.docx
+# *.pdf

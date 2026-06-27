@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图书类别管理页面</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="bootstrap-4.6.2-dist/css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="css/category.css">
+    <!-- jQuery -->
+    <script src="./js/jquery-3.7.1.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="bootstrap-4.6.2-dist/js/bootstrap.bundle.min.js"></script>
+</head>
+
+<body>
+    <!-- 页面标题 -->
+    <h1>图书类别管理</h1>
+
+    <!-- 添加图书类别弹窗 -->
+    <div id="add-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="add-modal-title">
+        <div class="modal-content">
+            <h2 id="add-modal-title" style="font-size:1.25rem;">添加图书类别</h2>
+            <span class="close" aria-label="关闭">&times;</span>
+            <form id="add-category-form">
+                <label for="new-category-name">图书类别名称：</label>
+                <input type="text" id="new-category-name" placeholder="输入图书类别名称">
+                <input type="submit" value="添加">
+            </form>
+        </div>
+    </div>
+
+    <!-- 编辑图书类别弹窗 -->
+    <div id="edit-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+        <div class="modal-content">
+            <h2 id="edit-modal-title" style="font-size:1.25rem;">编辑图书类别</h2>
+            <span class="close" aria-label="关闭">&times;</span>
+            <form id="edit-category-form">
+                <input type="hidden" id="edit-category-id">
+                <label for="edit-category-name">图书类别名称：</label>
+                <input type="text" id="edit-category-name" placeholder="输入新的图书类别名称">
+                <input type="submit" value="保存修改">
+            </form>
+        </div>
+    </div>
+
+    <!-- 搜索与操作区域 -->
+    <label for="search-input">搜索：</label>
+    <input type="text" id="search-input" placeholder="搜索图书类别">
+    <button id="search-btn">搜索</button>
+    <button id="show-add-form">添加图书类别</button>
+
+    <!-- 图书类别表格 -->
+    <table id="category-table">
+        <thead>
+            <tr>
+                <th>图书类别编号</th>
+                <th>图书类别</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        /**
+         * ============================================================
+         *  图书类别管理系统 — 前端逻辑
+         *  数据存储方式: 浏览器 sessionStorage
+         *
+         *  sessionStorage 数据结构说明:
+         *    key: "categories"
+         *    value: JSON 字符串，解析后为一个数组，每个元素是一个对象
+         *    对象结构:
+         *      {
+         *        id:   number  — 图书类别唯一编号（整数，由程序自动生成）
+         *        name: string  — 图书类别名称（用户输入的中文/英文文本）
+         *      }
+         *    示例:
+         *      [
+         *        { "id": 1, "name": "文学" },
+         *        { "id": 2, "name": "计算机科学" }
+         *      ]
+         *
+         *  核心操作流程:
+         *    1. 页面加载 → 从 sessionStorage 读取数据 → 渲染表格
+         *    2. 用户操作（增/删/改/查）→ 更新内存数组 → 写回 sessionStorage → 重新渲染表格
+         * ============================================================
+         */
+
+        $(function () {
+            // ============================================================
+            //  第一步: 缓存所有 jQuery 选择器（避免重复查询 DOM，提升性能）
+            // ============================================================
+            const $addModal        = $("#add-modal");
+            const $editModal       = $("#edit-modal");
+            const $addForm         = $("#add-category-form");
+            const $editForm        = $("#edit-category-form");
+            const $newCategoryName = $("#new-category-name");
+            const $editCategoryId   = $("#edit-category-id");
+            const $editCategoryName = $("#edit-category-name");
+            const $searchInput     = $("#search-input");
+            const $searchBtn       = $("#search-btn");
+            const $showAddFormBtn  = $("#show-add-form");
+            const $tableBody       = $("#category-table tbody");
+
+            // ============================================================
+            //  第二步: 从 sessionStorage 加载数据（带异常保护）
+            //  如果读取失败（例如数据损坏），降级为空数组，保证页面不崩溃
+            // ============================================================
+            const STORAGE_KEY = "categories";
+
+            /**
+             * 安全地从 sessionStorage 读取图书类别数据
+             * @returns {Array} 图书类别数组，读取失败时返回空数组 []
+             */
+            function loadCategories() {
+                try {
+                    const raw = sessionStorage.getItem(STORAGE_KEY);
+                    return raw ? JSON.parse(raw) : [];
+                } catch (err) {
+                    // 数据损坏或浏览器不支持 sessionStorage 时静默降级
+                    console.warn("读取图书类别数据失败，已使用空数组作为回退。错误:", err.message);
+                    return [];
+                }
+            }
+
+            /**
+             * 安全地将图书类别数据写入 sessionStorage
+             * @param {Array} data - 要保存的图书类别数组
+             */
+            function saveCategories(data) {
+                try {
+                    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                } catch (err) {
+                    // 写入失败时提示用户（例如存储空间已满）
+                    console.error("保存图书类别数据失败，错误:", err.message);
+                    alert("数据保存失败，请检查浏览器存储是否可用。");
+                }
+            }
+
+            // 初始化内存中的图书类别数组
+            let categories = loadCategories();
+
+            // ============================================================
+            //  第三步: 表格渲染函数 — 使用 jQuery DOM 创建方法避免 XSS
+            //
+            //  安全说明:
+            //    使用 $("<td>").text(item.name) 而非字符串拼接
+            //    .text() 方法会自动将特殊字符（<, >, &, ", '）转义为
+            //    HTML 实体，从而彻底杜绝跨站脚本攻击（XSS）。
+            //    按钮的 data-id 使用 .attr() 或 .data() 设置数值，
+            //    同样避免了注入风险。
+            // ============================================================
+
+            /**
+             * 全量渲染图书类别表格
+             * 遍历 categories 数组，为每个条目创建一行，
+             * 包含: 编号列、名称列、操作列（编辑 / 删除按钮）
+             */
+            function renderTable() {
+                // 清空表格现有内容
+                $tableBody.empty();
+
+                // 遍历类别数组，逐行构建 DOM
+                categories.forEach(function (item) {
+                    // 创建表格行 <tr>
+                    const $row = $("<tr>");
+
+                    // 编号列 — .text() 自动转义，防止 XSS
+                    $("<td>").text(item.id).appendTo($row);
+
+                    // 名称列 — .text() 自动转义用户输入，防止 XSS
+                    $("<td>").text(item.name).appendTo($row);
+
+                    // 操作列 — 包含编辑和删除两个按钮
+                    const $actionCell = $("<td>");
+
+                    // 编辑按钮 — 使用 .attr() 安全设置 data-id 属性
+                    $("<button>")
+                        .addClass("btn btn-edit")
+                        .attr("data-id", item.id)
+                        .text("编辑")
+                        .appendTo($actionCell);
+
+                    // 删除按钮 — 使用 .attr() 安全设置 data-id 属性
+                    $("<button>")
+                        .addClass("btn btn-delete")
+                        .attr("data-id", item.id)
+                        .text("删除")
+                        .appendTo($actionCell);
+
+                    $actionCell.appendTo($row);
+                    $row.appendTo($tableBody);
+                });
+            }
+
+            // 页面加载后立即渲染初始数据
+            renderTable();
+
+            // ============================================================
+            //  第四步: 搜索功能 — 根据输入关键字实时过滤表格行
+            //
+            //  逻辑说明:
+            //    读取搜索框文本，遍历表格每一行，取出第二列（类别名称）
+            //    的文本内容，使用 .includes() 进行模糊匹配。
+            //    匹配成功的行显示，失败的行隐藏。
+            //    .toggle(boolean) 等价于 show()/hide() 的切换。
+            // ============================================================
+
+            /**
+             * 执行搜索过滤
+             * 不区分大小写和全半角（仅做基本 includes 匹配）
+             */
+            function performSearch() {
+                const searchTerm = $searchInput.val().trim();
+                $tableBody.find("tr").each(function () {
+                    const $row = $(this);
+                    // 获取第二列（类别名称）的文本
+                    const categoryName = $row.find("td:nth-child(2)").text();
+                    // 模糊匹配：类别名称包含搜索词则显示，否则隐藏
+                    $row.toggle(categoryName.includes(searchTerm));
+                });
+            }
+
+            // 点击搜索按钮触发过滤
+            $searchBtn.on("click", performSearch);
+
+            // 搜索框按回车键时触发过滤（keypress 事件，keyCode 13 == Enter）
+            $searchInput.on("keypress", function (e) {
+                if (e.which === 13) {
+                    performSearch();
+                }
+            });
+
+            // ============================================================
+            //  第五步: 弹窗（Modal）的显示与隐藏
+            //
+            //  弹窗设计:
+            //    - 添加弹窗 (add-modal): 用于输入新类别名称
+            //    - 编辑弹窗 (edit-modal): 用于修改已有类别名称
+            //    - 每个弹窗右上角有 × 关闭按钮
+            //    - 点击弹窗遮罩层（外部灰色区域）也可关闭
+            // ============================================================
+
+            /**
+             * 显示添加类别弹窗
+             * 将弹窗 display 设为 block，使其可见
+             */
+            function showAddModal() {
+                $addModal.css("display", "block");
+            }
+
+            /**
+             * 隐藏添加类别弹窗并重置表单
+             */
+            function hideAddModal() {
+                $addModal.css("display", "none");
+                $addForm[0].reset();
+            }
+
+            /**
+             * 显示编辑类别弹窗
+             */
+            function showEditModal() {
+                $editModal.css("display", "block");
+            }
+
+            /**
+             * 隐藏编辑类别弹窗并重置表单
+             */
+            function hideEditModal() {
+                $editModal.css("display", "none");
+                $editForm[0].reset();
+            }
+
+            // 绑定"添加图书类别"按钮 → 显示添加弹窗
+            $showAddFormBtn.on("click", showAddModal);
+
+            // 绑定添加弹窗的关闭按钮（×）
+            $addModal.find(".close").on("click", hideAddModal);
+
+            // 绑定编辑弹窗的关闭按钮（×）
+            $editModal.find(".close").on("click", hideEditModal);
+
+            // 点击弹窗外部遮罩层 → 关闭弹窗
+            $(window).on("click", function (e) {
+                const $target = $(e.target);
+                if ($target.hasClass("modal")) {
+                    $target.css("display", "none");
+                    // 同时重置对应表单
+                    if ($target.attr("id") === "add-modal") {
+                        $addForm[0].reset();
+                    } else if ($target.attr("id") === "edit-modal") {
+                        $editForm[0].reset();
+                    }
+                }
+            });
+
+            // ============================================================
+            //  第六步: 添加图书类别（CREATE）
+            //
+            //  流程:
+            //    1. 用户输入类别名称并提交
+            //    2. 前端校验：名称不能为空
+            //    3. 前端校验：名称不能与已有类别重复
+            //    4. 生成新 ID（基于当前最大 ID + 1；如果数组为空，ID 从 1 开始）
+            //    5. 将新对象 push 到 categories 数组
+            //    6. 写回 sessionStorage
+            //    7. 重新渲染表格
+            //    8. 关闭弹窗并清空表单
+            // ============================================================
+
+            /**
+             * 生成新类别 ID
+             * 规则: 取当前所有类别 ID 的最大值 + 1；若数组为空则返回 1
+             * @returns {number} 新 ID
+             */
+            function generateNewId() {
+                if (categories.length === 0) {
+                    return 1;
+                }
+                return Math.max(...categories.map(function (c) { return c.id; })) + 1;
+            }
+
+            // 绑定添加表单的 submit 事件
+            $addForm.on("submit", function (event) {
+                // 阻止表单默认提交行为（防止页面刷新）
+                event.preventDefault();
+
+                // 获取并清理用户输入
+                const newCategoryName = $newCategoryName.val().trim();
+
+                // 校验: 名称为空
+                if (newCategoryName === "") {
+                    alert("请输入有效的图书类别名称");
+                    return;
+                }
+
+                // 校验: 名称已存在（防重复）
+                const isExists = categories.some(function (category) {
+                    return category.name === newCategoryName;
+                });
+                if (isExists) {
+                    alert("该图书类别已存在");
+                    return;
+                }
+
+                // 生成新 ID 并添加到数组
+                const newId = generateNewId();
+                categories.push({ id: newId, name: newCategoryName });
+
+                // 持久化到 sessionStorage 并刷新表格
+                saveCategories(categories);
+                renderTable();
+
+                // 关闭弹窗并清空表单
+                hideAddModal();
+            });
+
+            // ============================================================
+            //  第七步: 编辑图书类别（UPDATE）
+            //
+            //  流程分为两部分:
+            //    A. 点击编辑按钮 → 查询对应类别数据 → 填充到编辑弹窗
+            //    B. 提交编辑表单 → 校验 → 更新数组 → 持久化 → 刷新
+            // ============================================================
+
+            // --- 7-A: 点击编辑按钮，回填数据到弹窗 ---
+            // 使用事件委托（因为表格行是动态生成的）
+            $(document).on("click", ".btn-edit", function () {
+                // 从按钮的 data-id 属性获取要编辑的类别 ID
+                const id = $(this).data("id");
+
+                // 在数组中查找对应的类别对象
+                const category = categories.find(function (c) { return c.id === id; });
+
+                // 容错: 如果找不到（理论上不会发生），提示用户
+                if (!category) {
+                    alert("未找到该图书类别，请刷新页面后重试。");
+                    return;
+                }
+
+                // 将类别数据回填到编辑表单
+                $editCategoryId.val(category.id);
+                $editCategoryName.val(category.name);
+
+                // 显示编辑弹窗
+                showEditModal();
+            });
+
+            // --- 7-B: 提交编辑表单，执行更新 ---
+            $editForm.on("submit", function (event) {
+                // 阻止表单默认提交行为
+                event.preventDefault();
+
+                // 获取隐藏域中的类别 ID（转为整数）和用户输入的新名称
+                const editId   = parseInt($editCategoryId.val(), 10);
+                const editName = $editCategoryName.val().trim();
+
+                // 校验: 名称不能为空
+                if (editName === "") {
+                    alert("请输入有效的图书类别名称");
+                    return;
+                }
+
+                // 校验: 新名称不能与其他类别重复（排除自身）
+                const isExists = categories.some(function (c) {
+                    return c.name === editName && c.id !== editId;
+                });
+                if (isExists) {
+                    alert("该图书类别已存在");
+                    return;
+                }
+
+                // 找到目标对象并更新其名称
+                const targetItem = categories.find(function (c) { return c.id === editId; });
+                if (targetItem) {
+                    targetItem.name = editName;
+                }
+
+                // 持久化并刷新表格
+                saveCategories(categories);
+                renderTable();
+
+                // 关闭弹窗并清空表单
+                hideEditModal();
+            });
+
+            // ============================================================
+            //  第八步: 删除图书类别（DELETE）
+            //
+            //  流程:
+            //    1. 点击删除按钮 → 弹出确认框
+            //    2. 用户确认 → 从 categories 数组中过滤掉该项
+            //    3. 写回 sessionStorage
+            //    4. 重新渲染表格
+            //
+            //  注意: 此处使用 let 声明 categories，
+            //        因为 .filter() 返回新数组，需要重新赋值
+            // ============================================================
+
+            // 使用事件委托绑定删除按钮（表格行是动态生成的）
+            $(document).on("click", ".btn-delete", function () {
+                const id = $(this).data("id");
+
+                // 确认弹窗：防止误删
+                if (!confirm("确定要删除该图书类别吗？")) {
+                    return;
+                }
+
+                // 过滤掉要删除的条目（产生新数组，因此用 let 声明 categories）
+                categories = categories.filter(function (c) { return c.id !== id; });
+
+                // 持久化并刷新表格
+                saveCategories(categories);
+                renderTable();
+            });
+        });
+    </script>
+</body>
+
+</html>

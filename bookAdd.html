@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>添加图书</title>
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="bootstrap-4.6.2-dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="css/bookAdd.css" />
+  <!-- jQuery -->
+  <script src="js/jquery-3.7.1.min.js"></script>
+  <!-- Bootstrap JS -->
+  <script src="bootstrap-4.6.2-dist/js/bootstrap.bundle.min.js"></script>
+  <style>
+    .error {
+      color: red;
+      margin-left: 10px;
+      font-size: 12px;
+    }
+    .hover {
+      background: #ccc;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <!-- 页面标题 -->
+    <h1 id="form-heading">添加图书</h1>
+
+    <!--
+      添加图书表单
+      - role="form"：标识此区域为表单
+      - novalidate：禁止浏览器原生校验，统一由 JS 处理以确保错误提示风格一致
+    -->
+    <form id="book-add-form" role="form" aria-labelledby="form-heading" novalidate>
+
+      <label for="book-name">图书名称</label>
+      <input type="text" id="book-name" name="book-name"
+             placeholder="请输入图书名称"
+             aria-required="true" />
+
+      <label for="book-type">图书类型</label>
+      <select id="book-type" name="book-type"
+              aria-required="true"></select>
+
+      <label for="book-author">作者</label>
+      <input type="text" id="book-author" name="book-author"
+             placeholder="请输入作者"
+             aria-required="true" />
+
+      <label for="book-isbn">ISBN号</label>
+      <input type="text" id="book-isbn" name="book-isbn"
+             placeholder="请输入isbn号"
+             aria-required="true" />
+
+      <!--
+        TODO: 实现封面图片的文件上传功能
+        目前仅在前端选择了文件，尚未将文件数据通过 FormData 或
+        其他方式上传到服务器。后续需要：
+        1. 将表单改为 multipart/form-data 编码
+        2. 后端增加文件接收与存储逻辑
+        3. 上传完成后将封面 URL 一并写入图书数据
+      -->
+      <label for="book-cover">封面</label>
+      <input type="file" id="book-cover" name="book-cover" />
+
+      <label for="book-price">价格</label>
+      <input type="text" id="book-price" name="book-price"
+             placeholder="请输入价格"
+             aria-required="true" />
+
+      <label for="book-sort">排列序号</label>
+      <input type="text" id="book-sort" name="book-sort"
+             placeholder="请输入序号"
+             aria-required="true" />
+
+      <br />
+      <button type="submit" id="save-btn">保存</button>
+      <button type="button" id="back-btn">返回</button>
+    </form>
+  </div>
+
+  <script>
+    $(function () {
+      // =================================================================
+      // 1. 缓存常用 jQuery 选择器 —— 避免在事件处理中重复查询 DOM 树
+      // =================================================================
+      const $typeSelect  = $("#book-type");
+      const $bookName    = $("#book-name");
+      const $bookAuthor  = $("#book-author");
+      const $bookIsbn    = $("#book-isbn");
+      const $bookPrice   = $("#book-price");
+      const $bookSort    = $("#book-sort");
+      const $bookAddForm = $("#book-add-form");
+      const $saveBtn     = $("#save-btn");
+      const $backBtn     = $("#back-btn");
+
+      // =================================================================
+      // 2. 分类下拉框数据填充
+      //    从 sessionStorage 中读取 categories 数据（JSON 数组），
+      //    该数据由分类管理页面（category.html）在页面跳转前存入。
+      //    遍历数组，为每个分类名称创建一个 <option> 并追加到
+      //    #book-type 下拉框中，option 的 value 与显示文本均为分类名称。
+      // =================================================================
+      const bookTypes = JSON.parse(sessionStorage.getItem("categories")) || [];
+
+      bookTypes.forEach(function (item) {
+        $typeSelect.append(
+          $("<option></option>").val(item.name).text(item.name)
+        );
+      });
+
+      // =================================================================
+      // 3. 保存按钮 hover 交互效果
+      //    鼠标悬停时添加 .hover 类改变背景色，移出时恢复。
+      // =================================================================
+      $saveBtn.hover(
+        function () {
+          $(this).addClass("hover");
+        },
+        function () {
+          $(this).removeClass("hover");
+        }
+      );
+
+      // =================================================================
+      // 4. 表单提交验证逻辑
+      //    阻止浏览器默认提交行为，依次验证以下字段：
+      //      - 图书名称（非空）
+      //      - 作者（非空）
+      //      - ISBN 号（13位数字 + 校验位正确性）
+      //      - 价格（正数，使用 Number.isFinite 严格校验）
+      //      - 排列序号（正整数）
+      //    全部通过后，通过 AJAX POST 将数据发送到后端 api/bookAdd.php。
+      // =================================================================
+      $bookAddForm.submit(function (event) {
+        event.preventDefault();
+
+        let hasError = false;
+
+        // 清除上一次提交残留的验证错误信息
+        $(".error").remove();
+
+        // --------------------------------------------------------------
+        // 4.1 图书名称验证 —— 去除首尾空格后不能为空
+        // --------------------------------------------------------------
+        const bookName = $bookName.val().trim();
+        if (bookName === "") {
+          $bookName.after("<span class='error'>图书名称不能为空</span>");
+          hasError = true;
+        }
+
+        // --------------------------------------------------------------
+        // 4.2 作者验证 —— 去除首尾空格后不能为空
+        // --------------------------------------------------------------
+        const author = $bookAuthor.val().trim();
+        if (author === "") {
+          $bookAuthor.after("<span class='error'>作者不能为空</span>");
+          hasError = true;
+        }
+
+        // --------------------------------------------------------------
+        // 4.3 ISBN 号验证（13位，含校验位）
+        //
+        //    本系统采用 ISBN-13（基于 EAN-13 编码规范）。
+        //    校验位算法逐步骤说明：
+        //
+        //    【步骤1】去除分隔符
+        //      用户可能输入 "978-7-XXXX-XXXX-X" 这样的带连字符格式，
+        //      先用正则将所有的 "-" 替换为空字符串，得到纯数字串。
+        //
+        //    【步骤2】检查长度
+        //      去除分隔符后，纯数字串必须恰好为13位。不足或超出均判定
+        //      为无效 ISBN。
+        //
+        //    【步骤3】计算前12位的加权和
+        //      遍历前12位数字（索引 0 到 11），对每一位：
+        //        - 如果该位是奇数位（从1开始计数，即0-based偶索引0,2,4,…），
+        //          权重为 1 → sum += 1 * digit
+        //        - 如果该位是偶数位（从1开始计数，即0-based奇索引1,3,5,…），
+        //          权重为 3 → sum += 3 * digit
+        //      例如 ISBN 978-7-XXXX-XXXX-X：
+        //        sum = 1*9 + 3*7 + 1*8 + 3*7 + 1*X + 3*X + …（前12位）
+        //
+        //    【步骤4】计算校验位
+        //      remainder = sum % 10
+        //      checkDigit = (10 - remainder) % 10
+        //      - 当 remainder = 0 时，(10-0)%10 = 0，校验位为 0
+        //      - 当 remainder > 0 时，(10-remainder) 得到 1~10，
+        //        对10取模后映射为 1~9
+        //
+        //    【步骤5】比对校验位
+        //      将计算出的 checkDigit 与输入 ISBN 的第13位字符比对，
+        //      不一致则判定为无效 ISBN。
+        // --------------------------------------------------------------
+        let isbn = $bookIsbn.val().trim();
+
+        // 步骤1：移除所有连字符等分隔符
+        isbn = isbn.replace(/-/g, "");
+
+        // 步骤2：长度必须为13位
+        if (isbn.length !== 13) {
+          $bookIsbn.after("<span class='error'>ISBN应为13位</span>");
+          hasError = true;
+        } else {
+          // 步骤3：计算前12位的加权和
+          let sum = 0;
+          for (let i = 0; i < 12; i++) {
+            // 奇数位（第1,3,5,…位，对应0-based索引0,2,4,…）权重为1
+            // 偶数位（第2,4,6,…位，对应0-based索引1,3,5,…）权重为3
+            const weight = (i % 2 === 0) ? 1 : 3;
+            const digit = parseInt(isbn.charAt(i), 10);
+            sum += weight * digit;
+          }
+
+          // 步骤4：计算校验位
+          const remainder = sum % 10;
+          // 对10取模的余数范围是 0~9，(10-remainder)%10 优雅地统一了
+          // remainder=0（校验位0）和 remainder>0（校验位1~9）两种情况
+          const checkDigit = (10 - remainder) % 10;
+
+          // 步骤5：将计算出的校验位与输入的第13位比对
+          const actualCheckDigit = parseInt(isbn.charAt(12), 10);
+          if (checkDigit !== actualCheckDigit) {
+            $bookIsbn.after("<span class='error'>ISBN号必须是有效的</span>");
+            hasError = true;
+          }
+        }
+
+        // --------------------------------------------------------------
+        // 4.4 价格验证 —— 必须为有效的正数
+        //
+        //    修复说明（NaN 验证漏洞）：
+        //    原始代码使用 isNaN(price) 判断，但 isNaN 会先将参数隐式
+        //    转换为 Number 再检测：
+        //      isNaN("")     → false（空字符串 → Number("") = 0 → 非NaN）
+        //      isNaN("  ")   → false（空白字符串 → Number("  ") = 0 → 非NaN）
+        //      isNaN("abc")  → true
+        //    因此空字符串可能绕过 isNaN 检查。
+        //
+        //    修复方案：
+        //      1. 先显式检查 trim 后是否为空字符串
+        //      2. 使用 Number.isFinite() 进行严格数值校验：
+        //         - 空字符串 → Number("") = 0 → isFinite(0) = true，
+        //           但已在第1步拦截，不会到达此处
+        //         - "abc"     → Number("abc") = NaN → isFinite(NaN) = false
+        //         - Infinity  → isFinite(Infinity) = false
+        //         - "12.5"    → Number("12.5") = 12.5 → isFinite(12.5) = true
+        //      3. 最后检查数值是否大于0（正数约束）
+        // --------------------------------------------------------------
+        const priceRaw = $bookPrice.val().trim();
+        if (priceRaw === "") {
+          $bookPrice.after("<span class='error'>价格不能为空</span>");
+          hasError = true;
+        } else {
+          const price = Number(priceRaw);
+          if (!Number.isFinite(price) || price <= 0) {
+            $bookPrice.after("<span class='error'>价格必须为有效的正数</span>");
+            hasError = true;
+          }
+        }
+
+        // --------------------------------------------------------------
+        // 4.5 排列序号验证 —— 必须为正整数
+        //
+        //    修复说明（NaN 验证漏洞）：
+        //    原始代码直接调用 Number() 转换后用 Number.isInteger() 判断：
+        //      Number("") → 0 → Number.isInteger(0) → true
+        //    空字符串会被转为 0 而绕过空值检查（虽然后续的 <=0 条件会
+        //    拦截，但依赖隐式行为不够健壮）。
+        //
+        //    修复方案：
+        //      1. 先显式检查 trim 后是否为空字符串
+        //      2. 使用 Number.isInteger() 校验整数
+        //      3. 检查是否大于0（正整数约束）
+        // --------------------------------------------------------------
+        const sortRaw = $bookSort.val().trim();
+        if (sortRaw === "") {
+          $bookSort.after("<span class='error'>排列序号不能为空</span>");
+          hasError = true;
+        } else {
+          const bookSort = Number(sortRaw);
+          if (!Number.isInteger(bookSort) || bookSort <= 0) {
+            $bookSort.after("<span class='error'>排序序号必须为有效正整数</span>");
+            hasError = true;
+          }
+        }
+
+        // --------------------------------------------------------------
+        // 4.6 所有验证通过 —— 通过 AJAX POST 提交数据到后端
+        //
+        //    使用 jQuery $.ajax 返回的 jqXHR 对象的 Promise 接口，
+        //    以 .then() / .catch() 链式风格处理成功与失败回调。
+        //    - .then()：后端返回成功响应时，弹窗提示用户并重置表单
+        //    - .catch()：网络错误或服务器错误时，提取具体错误信息
+        //      向用户展示可读的失败原因
+        // --------------------------------------------------------------
+        if (!hasError) {
+          const bookData = {
+            title:    bookName,
+            category: $typeSelect.val(),
+            author:   author,
+            isbn:     $bookIsbn.val(),
+            price:    priceRaw,
+            sort:     Number(sortRaw)
+          };
+
+          // jQuery $.ajax 返回的 jqXHR 实现了 Promise 接口，
+          // 因此可以使用 .then().catch() 模式处理异步结果
+          $.ajax({
+            url:  "api/bookAdd.php",
+            type: "POST",
+            data: bookData
+          })
+            .then(function (response) {
+              // 提交成功：通知用户并重置表单以供继续添加
+              alert("添加图书成功");
+              // 直接通过原生 DOM 方法重置表单，比 .bind(this) 更清晰
+              $bookAddForm[0].reset();
+            })
+            .catch(function (jqXHR, textStatus, errorThrown) {
+              // 提交失败：构造用户可读的错误提示
+              let errorMsg = "添加图书失败";
+              if (errorThrown) {
+                errorMsg += "：" + errorThrown;
+              } else if (jqXHR && jqXHR.status) {
+                errorMsg += "（HTTP 状态码：" + jqXHR.status + "）";
+              } else {
+                errorMsg += "，请检查网络连接后重试";
+              }
+              alert(errorMsg);
+            });
+        }
+      });
+
+      // =================================================================
+      // 5. 返回按钮 —— 跳转到图书管理列表页面
+      // =================================================================
+      $backBtn.click(function () {
+        window.location.href = "book.html";
+      });
+    });
+  </script>
+</body>
+
+</html>

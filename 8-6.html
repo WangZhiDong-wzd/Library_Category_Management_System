@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图书分类管理系统</title>
+    <!-- 引入 Bootstrap 4.6.2 核心样式文件，提供栅格系统、组件样式和工具类 -->
+    <link rel="stylesheet" href="bootstrap-4.6.2-dist/css/bootstrap.min.css">
+    <!-- 引入项目自定义样式文件，用于微调页面外观 -->
+    <link rel="stylesheet" href="css/8-6.css">
+</head>
+<body>
+    <!-- 主容器：使用自定义类 container-custom 控制页面整体宽度和布局 -->
+    <main class="container-custom">
+        <!--
+        ============================================================
+        导航区域：使用 <nav> 语义元素包裹标签页导航
+        - role="tablist": 声明这是一个标签页列表容器（ARIA 无障碍标准）
+        - .nav .nav-tabs: Bootstrap 4 的标签页组件样式，渲染为水平标签栏
+        ============================================================
+        -->
+        <nav class="nav nav-tabs" role="tablist">
+            <!--
+            每个 <li> 代表一个标签选项：
+            - role="presentation": 表明 <li> 仅用于样式布局，不具备语义含义
+            - .nav-item: Bootstrap 为导航项提供的容器样式
+            -->
+            <li class="nav-item" role="presentation">
+                <!--
+                标签链接 - "首页"：
+                - role="tab": 声明此元素为标签页切换按钮
+                - aria-selected="true": 初始状态为选中（与 active 类对应）
+                - aria-controls="index": 关联其控制的 tabpanel 的 id
+                - id="tab-link-index": 作为 tabpanel 的 aria-labelledby 引用目标
+                - .nav-link .active: Bootstrap 样式，active 表示当前激活的标签
+                - href="#index": 指向对应的 tab-pane 容器
+                -->
+                <a class="nav-link active" role="tab" aria-selected="true"
+                   aria-controls="index" id="tab-link-index"
+                   href="#index">首页</a>
+            </li>
+            <li class="nav-item" role="presentation">
+                <!--
+                标签链接 - "主要业务"：
+                - aria-selected="false": 初始未选中状态
+                - aria-controls="course": 关联 #course 面板
+                - id="tab-link-course": 唯一标识，供 aria-labelledby 引用
+                -->
+                <a class="nav-link" role="tab" aria-selected="false"
+                   aria-controls="course" id="tab-link-course"
+                   href="#course">主要业务</a>
+            </li>
+            <li class="nav-item" role="presentation">
+                <!--
+                标签链接 - "技术支持"：
+                提供系统运维、培训等方面的支持入口
+                -->
+                <a class="nav-link" role="tab" aria-selected="false"
+                   aria-controls="help" id="tab-link-help"
+                   href="#help">技术支持</a>
+            </li>
+            <li class="nav-item" role="presentation">
+                <!--
+                标签链接 - "关于我们"：
+                展示团队信息和项目背景
+                -->
+                <a class="nav-link" role="tab" aria-selected="false"
+                   aria-controls="about" id="tab-link-about"
+                   href="#about">关于我们</a>
+            </li>
+        </nav>
+
+        <!--
+        ============================================================
+        标签页内容区域：.tab-content 包含所有 tab-pane
+        每个 tab-pane 通过 id 与对应的导航链接关联
+        ============================================================
+        -->
+        <div class="tab-content">
+            <!--
+            ============================================================
+            第一个面板："首页"（#index）
+            - role="tabpanel": 声明为标签页内容面板
+            - aria-labelledby="tab-link-index": 关联到上方的导航链接
+            - .active: 初始显示此面板
+            ============================================================
+            -->
+            <section class="tab-pane active" id="index"
+                     role="tabpanel" aria-labelledby="tab-link-index">
+                <h2 class="content-title">欢迎使用图书分类管理系统</h2>
+                <p class="content-text">
+                    这是一个现代化的图书分类管理系统，提供高效的图书管理和分类服务。
+                    系统采用先进的技术架构，确保数据安全和操作便捷。
+                </p>
+                <!-- 首页功能亮点列表 -->
+                <ul class="feature-list">
+                    <li>智能分类管理</li>
+                    <li>快速检索功能</li>
+                    <li>数据统计分析</li>
+                    <li>用户权限管理</li>
+                </ul>
+            </section>
+
+            <!--
+            ============================================================
+            第二个面板："主要业务"（#course）
+            展示系统核心业务功能列表
+            ============================================================
+            -->
+            <section class="tab-pane" id="course"
+                     role="tabpanel" aria-labelledby="tab-link-course">
+                <h2 class="content-title">主要业务</h2>
+                <p class="content-text">
+                    我们提供全方位的图书管理服务，包括图书采购、分类编目、借阅管理等核心功能。
+                </p>
+                <!-- 主要业务功能列表 -->
+                <ul class="feature-list">
+                    <li>图书采购与入库</li>
+                    <li>分类编目管理</li>
+                    <li>借阅流程管理</li>
+                    <li>库存盘点统计</li>
+                    <li>读者信息管理</li>
+                </ul>
+            </section>
+
+            <!--
+            ============================================================
+            第三个面板："技术支持"（#help）
+            介绍技术支持的覆盖范围和服务内容
+            ============================================================
+            -->
+            <section class="tab-pane" id="help"
+                     role="tabpanel" aria-labelledby="tab-link-help">
+                <h2 class="content-title">技术支持</h2>
+                <p class="content-text">
+                    我们提供专业的技术支持服务，确保系统稳定运行和用户操作顺畅。
+                </p>
+                <!-- 技术支持服务列表 -->
+                <ul class="feature-list">
+                    <li>7×24小时在线支持</li>
+                    <li>系统维护与升级</li>
+                    <li>数据备份与恢复</li>
+                    <li>用户培训服务</li>
+                    <li>技术咨询与解答</li>
+                </ul>
+            </section>
+
+            <!--
+            ============================================================
+            第四个面板："关于我们"（#about）
+            展示开发团队背景和核心优势
+            ============================================================
+            -->
+            <section class="tab-pane" id="about"
+                     role="tabpanel" aria-labelledby="tab-link-about">
+                <h2 class="content-title">关于我们</h2>
+                <p class="content-text">
+                    我们是一支专业的图书管理系统开发团队，致力于为图书馆和图书管理机构
+                    提供优质的数字化解决方案。
+                </p>
+                <!-- 团队优势列表 -->
+                <ul class="feature-list">
+                    <li>专业的开发团队</li>
+                    <li>丰富的行业经验</li>
+                    <li>优质的服务保障</li>
+                    <li>持续的技术创新</li>
+                </ul>
+            </section>
+        </div>
+    </main>
+
+    <!-- 引入 jQuery 3.7.1：Bootstrap 4 的 JavaScript 插件依赖 jQuery -->
+    <script src="js/jquery-3.7.1.min.js"></script>
+    <!-- 引入 Bootstrap 4.6.2 完整包（包含 Popper.js 和全部 JS 插件） -->
+    <script src="bootstrap-4.6.2-dist/js/bootstrap.bundle.min.js"></script>
+
+    <!--
+    ============================================================
+    Bootstrap 4 标签页切换逻辑（JavaScript API）
+    ============================================================
+    说明：
+    1. Bootstrap 4 提供 $.fn.tab() 方法来以编程方式控制标签页切换。
+    2. 调用 $(selector).tab('show') 可激活指定的标签页。
+    3. 相比 data-toggle="tab" 属性方式，使用 JS API 更加灵活：
+       - 可以在切换前/后执行自定义逻辑（通过事件钩子）
+       - 避免了 HTML 属性污染，逻辑集中在 JavaScript 中
+       - 为未来迁移到 Bootstrap 5（data-bs-toggle）铺平道路
+    4. 事件流程：
+       - 点击链接 -> 阻止默认跳转行为（e.preventDefault()）
+       - 调用 $(this).tab('show') 触发 Bootstrap 内部的 Tab 组件
+       - Bootstrap 触发 'show.bs.tab' / 'shown.bs.tab' 事件
+       - 自动更新 .active 类、aria-selected 属性和面板显示/隐藏
+    ============================================================
+    -->
+    <script>
+        $(function() {
+            // 为所有 .nav-link 标签绑定点击事件
+            // 使用 Bootstrap 4 的 Tab JavaScript API 替代已弃用的 data-toggle="tab" 属性
+            $('.nav-link').on('click', function(e) {
+                // 阻止浏览器默认的锚点跳转行为（避免 URL 中出现 #hash）
+                e.preventDefault();
+
+                // 调用 Bootstrap Tab 插件的 'show' 方法
+                // $(this) 指向被点击的 .nav-link 元素
+                // .tab('show') 会：
+                //   1. 移除所有同级 .nav-link 的 .active 类和 aria-selected="true"
+                //   2. 为当前链接添加 .active 类并设置 aria-selected="true"
+                //   3. 隐藏所有 .tab-pane，显示与 href 对应的面板
+                $(this).tab('show');
+            });
+        });
+    </script>
+</body>
+</html>

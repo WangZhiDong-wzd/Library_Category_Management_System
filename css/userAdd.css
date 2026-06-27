@@ -1,0 +1,88 @@
+/* 全局样式 */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 30px;
+    background-color: #f5f7fa;
+}
+
+/* 页面容器 */
+.container {
+    max-width: 600px;
+    margin: 0 auto;
+    background-color: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+/* 页面标题 */
+h1 {
+    text-align: center;
+    color: #2c3e50;
+    margin-bottom: 30px;
+}
+
+/* 表单标签 */
+form label {
+    display: block;
+    margin-bottom: 5px;
+    margin-top: 20px;
+    color: #666666;
+    font-weight: 500;
+}
+
+/* 表单输入框和下拉框 */
+form input[type="text"], form input[type="password"], form input[type="email"],
+form select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #cccccc;
+    border-radius: 3px;
+    font-size: 14px;
+}
+
+/* 表单元素获取焦点时 */
+form input:focus, form select:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
+}
+
+/* 按钮通用样式 */
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 3px;
+    font-size: 14px;
+    cursor: pointer;
+    margin-top: 20px;
+    margin-right: 10px;
+}
+
+/* 提交按钮 */
+.btn-primary {
+    background-color: dodgerblue;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: royalblue;
+}
+
+/* 返回按钮 */
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #5a6268;
+}
+
+/* 错误提示信息 */
+.error {
+    color: red;
+    font-size: 12px;
+    margin-top: 5px;
+}

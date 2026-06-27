@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户等级管理页面</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="bootstrap-4.6.2-dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/grade.css">
+    <!-- jQuery -->
+    <script src="js/jquery-3.7.1.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="bootstrap-4.6.2-dist/js/bootstrap.bundle.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <!-- 页面标题 -->
+        <h1 class="page-title">用户等级管理</h1>
+
+        <!-- 搜索与操作区域 -->
+        <div class="search-section">
+            <label for="search-input" class="sr-only">搜索等级名称</label>
+            <input type="text" id="search-input" placeholder="搜索等级名称">
+            <button id="search-btn" class="btn btn-primary">搜索</button>
+            <button id="clear-btn" class="btn btn-secondary">清空</button>
+            <button id="show-add-form" class="btn btn-success">添加等级</button>
+        </div>
+
+        <!--
+            添加等级弹窗 (Add Modal)
+            - role="dialog": 告知辅助技术这是一个对话框
+            - aria-modal="true": 提示辅助技术该对话框是模态的（阻止与背景交互）
+            - aria-labelledby="add-modal-title": 将弹窗标题与弹窗关联，提升可访问性
+        -->
+        <div id="add-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="add-modal-title">
+            <div class="modal-content">
+                <span class="close" aria-label="关闭">&times;</span>
+                <h3 id="add-modal-title">添加用户等级</h3>
+                <form id="add-form">
+                    <div class="form-group">
+                        <label for="add-name">等级名称:</label>
+                        <input type="text" id="add-name" placeholder="请输入等级名称" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="add-level">等级级别:</label>
+                        <input type="number" id="add-level" placeholder="请输入等级级别（数字）" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">添加</button>
+                </form>
+            </div>
+        </div>
+
+        <!--
+            编辑等级弹窗 (Edit Modal)
+            - role="dialog": 告知辅助技术这是一个对话框
+            - aria-modal="true": 提示辅助技术该对话框是模态的
+            - aria-labelledby="edit-modal-title": 将弹窗标题与弹窗关联
+        -->
+        <div id="edit-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+            <div class="modal-content">
+                <span class="close" aria-label="关闭">&times;</span>
+                <h3 id="edit-modal-title">编辑用户等级</h3>
+                <form id="edit-form">
+                    <label for="edit-id" class="sr-only">等级ID</label>
+                    <input type="hidden" id="edit-id">
+                    <div class="form-group">
+                        <label for="edit-name">等级名称:</label>
+                        <input type="text" id="edit-name" placeholder="请输入等级名称" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-level">等级级别:</label>
+                        <input type="number" id="edit-level" placeholder="请输入等级级别（数字）" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">保存修改</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 用户等级表格 -->
+        <div class="table-container">
+            <table id="grade-table">
+                <thead>
+                    <tr>
+                        <th>等级编号</th>
+                        <th>等级名称</th>
+                        <th>等级级别</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ============================================================
+         * 用户等级数据模型 (User Grade Data Model)
+         * ============================================================
+         *
+         * sessionStorage 键名: 'grades'
+         * 存储格式: JSON 字符串序列化的对象数组
+         *
+         * 单个等级对象结构:
+         * {
+         *   id:    {number} - 等级唯一标识符，正整数，自增生成
+         *   name:  {string} - 等级名称，如 "普通会员"、"高级会员"
+         *   level: {number} - 等级级别数值，可用于排序或权限判定
+         * }
+         *
+         * 示例数据:
+         * [
+         *   { id: 1, name: "普通会员", level: 1 },
+         *   { id: 2, name: "高级会员", level: 2 },
+         *   { id: 3, name: "VIP会员",  level: 3 }
+         * ]
+         *
+         * 数据流转:
+         *   页面加载 → 从 sessionStorage 读取 → 渲染表格
+         *   增/删/改操作 → 更新内存数组 → 写回 sessionStorage → 重新渲染表格
+         * ============================================================
+         */
+
+        $(function () {
+
+            // ========================================================
+            // sessionStorage 工具函数 —— 提供安全的读写封装
+            // ========================================================
+
+            /**
+             * 从 sessionStorage 安全地读取等级数据
+             * 如果读取失败（如隐私模式限制、数据损坏），返回空数组
+             * @returns {Array} 等级对象数组
+             */
+            function loadGradesFromStorage() {
+                try {
+                    const raw = sessionStorage.getItem('grades');
+                    if (raw === null) {
+                        return [];
+                    }
+                    const parsed = JSON.parse(raw);
+                    // 校验数据格式：确保是数组
+                    if (!Array.isArray(parsed)) {
+                        return [];
+                    }
+                    return parsed;
+                } catch (e) {
+                    // sessionStorage 不可用（如无痕浏览、配额耗尽）或 JSON 解析失败
+                    console.warn('无法从 sessionStorage 读取等级数据:', e.message);
+                    return [];
+                }
+            }
+
+            /**
+             * 将等级数据安全地写入 sessionStorage
+             * 写入失败时仅输出警告，不阻塞业务逻辑
+             * @param {Array} data - 等级对象数组
+             */
+            function saveGradesToStorage(data) {
+                try {
+                    sessionStorage.setItem('grades', JSON.stringify(data));
+                } catch (e) {
+                    // sessionStorage 配额耗尽或其他写入错误
+                    console.warn('无法将等级数据写入 sessionStorage:', e.message);
+                }
+            }
+
+            // ========================================================
+            // 全局状态 —— 内存中的等级数据主副本
+            // ========================================================
+            let grades = loadGradesFromStorage();
+
+            // ========================================================
+            // jQuery 选择器缓存 —— 避免重复查询 DOM，提升性能
+            // ========================================================
+            const $gradeTableBody  = $('#grade-table tbody');
+            const $searchInput     = $('#search-input');
+            const $searchBtn       = $('#search-btn');
+            const $clearBtn        = $('#clear-btn');
+            const $showAddFormBtn  = $('#show-add-form');
+            const $addModal        = $('#add-modal');
+            const $addForm         = $('#add-form');
+            const $addName         = $('#add-name');
+            const $addLevel        = $('#add-level');
+            const $editModal       = $('#edit-modal');
+            const $editForm        = $('#edit-form');
+            const $editId          = $('#edit-id');
+            const $editName        = $('#edit-name');
+            const $editLevel       = $('#edit-level');
+            const $addModalClose   = $('#add-modal .close');
+            const $editModalClose  = $('#edit-modal .close');
+
+            // ========================================================
+            // 表格渲染 (Table Rendering)
+            // 使用 jQuery DOM 创建方法构建每一行，彻底避免 XSS 风险
+            // 替代了原先的字符串拼接方式（item.name/item.id 直接拼入 HTML）
+            // ========================================================
+
+            /**
+             * 渲染等级表格
+             * 清空 <tbody>，遍历 grades 数组，使用 jQuery DOM API 逐行构建
+             * 所有用户数据通过 .text() 设置，确保 HTML 特殊字符被转义
+             */
+            function initTable() {
+                // 清空表格主体
+                $gradeTableBody.empty();
+
+                // 遍历等级数据，逐行构建 DOM
+                grades.forEach(function (item) {
+                    // 创建表格行 <tr>
+                    const $tr = $('<tr>');
+
+                    // 等级编号列 —— .text() 自动转义，防止 XSS
+                    $tr.append($('<td>').text(item.id));
+
+                    // 等级名称列
+                    $tr.append($('<td>').text(item.name));
+
+                    // 等级级别列
+                    $tr.append($('<td>').text(item.level));
+
+                    // 操作列 —— 包含编辑和删除按钮
+                    const $actionTd = $('<td>');
+                    $actionTd.append(
+                        $('<button>')
+                            .addClass('btn btn-edit')
+                            .attr('data-id', item.id)
+                            .text('编辑')
+                    );
+                    $actionTd.append(
+                        $('<button>')
+                            .addClass('btn btn-delete')
+                            .attr('data-id', item.id)
+                            .text('删除')
+                    );
+                    $tr.append($actionTd);
+
+                    // 将行追加到表格主体
+                    $gradeTableBody.append($tr);
+                });
+            }
+
+            // 页面加载时首次渲染表格
+            initTable();
+
+            // ========================================================
+            // 搜索功能 (Search)
+            // 基于输入的关键词，实时筛选表格行
+            // 匹配逻辑：等级名称包含搜索词即视为命中
+            // ========================================================
+
+            /**
+             * 执行搜索过滤
+             * 获取搜索输入框内容，遍历表格每一行，隐藏不匹配的行
+             */
+            function performSearch() {
+                const term = $searchInput.val().trim();
+                $gradeTableBody.find('tr').each(function () {
+                    const $row = $(this);
+                    // 获取第二列（等级名称）的文本内容
+                    const name = $row.find('td:nth-child(2)').text();
+                    // 根据名称是否包含搜索词来显示/隐藏行
+                    $row.toggle(name.includes(term));
+                });
+            }
+
+            // 点击搜索按钮触发搜索
+            $searchBtn.on('click', performSearch);
+
+            // 在搜索输入框中按下回车键也触发搜索
+            $searchInput.on('keypress', function (e) {
+                if (e.which === 13) {
+                    performSearch();
+                }
+            });
+
+            // 清空搜索：重置输入框并显示所有行
+            $clearBtn.on('click', function () {
+                $searchInput.val('');
+                $gradeTableBody.find('tr').show();
+            });
+
+            // ========================================================
+            // 添加等级弹窗 (Add Modal Handling)
+            // 控制添加弹窗的显示、隐藏以及表单提交
+            // ========================================================
+
+            // 显示添加弹窗
+            $showAddFormBtn.on('click', function () {
+                $addModal.css('display', 'block');
+            });
+
+            // 点击关闭按钮隐藏添加弹窗
+            $addModalClose.on('click', function () {
+                $addModal.css('display', 'none');
+            });
+
+            /**
+             * 处理添加等级表单提交 (Create / C of CRUD)
+             * 1. 阻止默认表单提交行为
+             * 2. 校验输入（名称非空、级别为有效数字、名称不重复）
+             * 3. 生成新 ID（当前最大 ID + 1，空列表时从 1 开始）
+             * 4. 更新内存数据并持久化到 sessionStorage
+             * 5. 重新渲染表格、重置表单、关闭弹窗
+             */
+            $addForm.on('submit', function (e) {
+                e.preventDefault();
+
+                // 读取并清理用户输入
+                const name  = $addName.val().trim();
+                const level = parseInt($addLevel.val().trim(), 10);
+
+                // 校验：名称为空
+                if (!name) {
+                    alert('请输入等级名称');
+                    return;
+                }
+
+                // 校验：级别不是有效数字
+                if (isNaN(level)) {
+                    alert('请输入有效的等级级别');
+                    return;
+                }
+
+                // 校验：名称重复
+                if (grades.some(function (g) { return g.name === name; })) {
+                    alert('该等级名称已存在');
+                    return;
+                }
+
+                // 生成新 ID —— 使用展开运算符替代 Math.max.apply
+                const newId = grades.length > 0
+                    ? Math.max(...grades.map(function (g) { return g.id; })) + 1
+                    : 1;
+
+                // 将新等级加入数组并持久化
+                grades.push({ id: newId, name: name, level: level });
+                saveGradesToStorage(grades);
+
+                // 刷新表格、重置表单、关闭弹窗
+                initTable();
+                $addForm[0].reset();
+                $addModal.css('display', 'none');
+            });
+
+            // ========================================================
+            // 编辑等级弹窗 (Edit Modal Handling)
+            // 控制编辑弹窗的显示、数据回填、隐藏以及表单提交
+            // ========================================================
+
+            /**
+             * 显示编辑弹窗（通过事件委托绑定到动态生成的按钮）
+             * 根据 data-id 查找对应等级对象，将数据回填到表单中
+             */
+            $(document).on('click', '.btn-edit', function () {
+                const id = $(this).data('id');
+                const grade = grades.find(function (g) { return g.id === id; });
+
+                if (!grade) {
+                    alert('未找到该等级记录');
+                    return;
+                }
+
+                // 将等级数据回填到编辑表单
+                $editId.val(grade.id);
+                $editName.val(grade.name);
+                $editLevel.val(grade.level);
+
+                // 显示编辑弹窗
+                $editModal.css('display', 'block');
+            });
+
+            // 点击关闭按钮隐藏编辑弹窗
+            $editModalClose.on('click', function () {
+                $editModal.css('display', 'none');
+            });
+
+            /**
+             * 处理编辑等级表单提交 (Update / U of CRUD)
+             * 1. 阻止默认表单提交行为
+             * 2. 校验输入
+             * 3. 在数组中查找并更新对应记录
+             * 4. 持久化到 sessionStorage
+             * 5. 重新渲染表格、重置表单、关闭弹窗
+             */
+            $editForm.on('submit', function (e) {
+                e.preventDefault();
+
+                // 读取表单数据
+                const id    = parseInt($editId.val(), 10);
+                const name  = $editName.val().trim();
+                const level = parseInt($editLevel.val().trim(), 10);
+
+                // 校验：名称为空
+                if (!name) {
+                    alert('请输入等级名称');
+                    return;
+                }
+
+                // 校验：级别不是有效数字
+                if (isNaN(level)) {
+                    alert('请输入有效的等级级别');
+                    return;
+                }
+
+                // 校验：名称与其他记录重复（排除自身）
+                if (grades.some(function (g) { return g.name === name && g.id !== id; })) {
+                    alert('该等级名称已存在');
+                    return;
+                }
+
+                // 查找并更新目标记录
+                const item = grades.find(function (g) { return g.id === id; });
+                if (!item) {
+                    alert('未找到该等级记录');
+                    return;
+                }
+                item.name  = name;
+                item.level = level;
+
+                // 持久化数据并刷新表格
+                saveGradesToStorage(grades);
+                initTable();
+
+                // 重置表单、关闭弹窗
+                $editForm[0].reset();
+                $editModal.css('display', 'none');
+            });
+
+            // ========================================================
+            // 删除等级 (Delete / D of CRUD)
+            // 使用事件委托绑定到动态生成的删除按钮
+            // ========================================================
+
+            /**
+             * 处理等级删除
+             * 弹出确认对话框，确认后从数组中移除对应记录
+             * 随后持久化数据并重新渲染表格
+             */
+            $(document).on('click', '.btn-delete', function () {
+                const id = $(this).data('id');
+
+                // 确认删除
+                if (!confirm('确定要删除该用户等级吗？')) {
+                    return;
+                }
+
+                // 过滤掉被删除的记录
+                grades = grades.filter(function (g) { return g.id !== id; });
+
+                // 持久化并刷新表格
+                saveGradesToStorage(grades);
+                initTable();
+            });
+
+            // ========================================================
+            // 全局弹窗关闭 —— 点击弹窗背景遮罩层关闭弹窗
+            // 通过检测点击目标是否具有 .modal 类来判断
+            // ========================================================
+            $(window).on('click', function (e) {
+                if ($(e.target).hasClass('modal')) {
+                    $(e.target).css('display', 'none');
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,551 @@
+/* ======================================================
+   登录页面样式 — 暖色书香主题
+   ====================================================== */
+
+/* ========== CSS 变量 ========== */
+:root {
+    --primary-dark: #1b2838;
+    --primary: #2c3e50;
+    --accent: #c8a96e;
+    --accent-hover: #b8944f;
+    --accent-light: rgba(200, 169, 110, 0.12);
+    --text-primary: #2c3e50;
+    --text-secondary: #7f8c8d;
+    --text-muted: #bdc3c7;
+    --bg-card: rgba(255, 255, 255, 0.97);
+    --border-color: #e8ecf1;
+    --input-bg: #f7f8fa;
+    --error: #e74c3c;
+    --success: #27ae60;
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+    --shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.2);
+    --radius: 16px;
+    --radius-sm: 10px;
+    --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ========== 基础重置 & 背景 ========== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-image: url(../img/书城.png);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    position: relative;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* 背景渐变遮罩 */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg,
+        rgba(27, 40, 56, 0.82) 0%,
+        rgba(44, 62, 80, 0.65) 50%,
+        rgba(0, 0, 0, 0.5) 100%
+    );
+    z-index: 0;
+}
+
+/* ========== 外层容器 ========== */
+.login-wrapper {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    animation: wrapperFadeIn 0.8s ease-out;
+}
+
+@keyframes wrapperFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* ========== 登录卡片 ========== */
+.login-card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 40px 36px 24px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    animation: cardSlideUp 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes cardSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(40px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* ========== 头部 ========== */
+.login-header {
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+/* 书籍图标 */
+.logo-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 16px;
+    background: linear-gradient(135deg, var(--accent), #d4a95a);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: #fff;
+    box-shadow: 0 8px 24px rgba(200, 169, 110, 0.35);
+    transition: transform var(--transition);
+}
+
+.logo-icon:hover {
+    transform: scale(1.05) rotate(-5deg);
+}
+
+.system-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 6px;
+    letter-spacing: 1px;
+}
+
+.system-desc {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin: 0;
+    font-weight: 400;
+}
+
+/* ========== Tab 切换 ========== */
+.tabs {
+    display: flex;
+    background: var(--input-bg);
+    border-radius: var(--radius-sm);
+    padding: 4px;
+    margin-bottom: 24px;
+    position: relative;
+}
+
+.tab {
+    flex: 1;
+    padding: 10px 16px;
+    text-align: center;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all var(--transition);
+    position: relative;
+    z-index: 1;
+    font-family: inherit;
+    outline: none;
+}
+
+.tab i {
+    margin-right: 6px;
+    font-size: 13px;
+}
+
+.tab.active {
+    color: var(--text-primary);
+    background: #fff;
+    box-shadow: var(--shadow-sm);
+}
+
+.tab:hover:not(.active) {
+    color: var(--primary);
+}
+
+.tab:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* ========== Tab 内容切换动画 ========== */
+.login-form {
+    display: none;
+    animation: formFadeIn 0.35s ease-out;
+}
+
+.login-form.active {
+    display: block;
+}
+
+@keyframes formFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ========== 输入框组 ========== */
+.input-group-custom {
+    position: relative;
+    margin-bottom: 16px;
+}
+
+.input-group-custom .form-control {
+    width: 100%;
+    padding: 12px 16px 12px 42px;
+    height: auto;
+    font-size: 14px;
+    color: var(--text-primary);
+    background: var(--input-bg);
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    transition: all var(--transition);
+    font-family: inherit;
+}
+
+.input-group-custom .form-control::placeholder {
+    color: var(--text-muted);
+    font-weight: 300;
+}
+
+.input-group-custom .form-control:focus {
+    border-color: var(--accent);
+    background: #fff;
+    box-shadow: 0 0 0 4px var(--accent-light);
+    outline: none;
+}
+
+/* 输入框图标 */
+.input-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 15px;
+    pointer-events: none;
+    transition: color var(--transition);
+    z-index: 2;
+}
+
+.input-group-custom .form-control:focus ~ .input-icon {
+    color: var(--accent);
+}
+
+/* ========== 密码切换按钮 ========== */
+.password-toggle {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 6px;
+    font-size: 15px;
+    transition: color var(--transition);
+    z-index: 2;
+    line-height: 1;
+}
+
+.password-toggle:hover {
+    color: var(--text-secondary);
+}
+
+/* ========== 错误状态 ========== */
+.input-group-custom .form-control.is-invalid {
+    border-color: var(--error);
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(231, 76, 60, 0.08);
+}
+
+.input-group-custom .form-control.is-invalid ~ .input-icon {
+    color: var(--error);
+}
+
+.invalid-feedback {
+    display: none;
+    font-size: 12px;
+    color: var(--error);
+    margin-top: 4px;
+    padding-left: 2px;
+}
+
+.form-control.is-invalid ~ .invalid-feedback {
+    display: block;
+}
+
+/* ========== 选项行（记住密码 + 忘记密码） ========== */
+.form-options {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    font-size: 13px;
+}
+
+/* 自定义复选框 */
+.custom-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    user-select: none;
+    position: relative;
+    padding-left: 28px;
+}
+
+.custom-checkbox input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.checkmark {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--input-bg);
+    transition: all var(--transition);
+}
+
+.custom-checkbox input:checked ~ .checkmark {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.custom-checkbox input:checked ~ .checkmark::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 1px;
+    width: 5px;
+    height: 9px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.custom-checkbox input:focus-visible ~ .checkmark {
+    box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+/* 忘记密码链接 */
+.forgot-link {
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color var(--transition);
+}
+
+.forgot-link:hover {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+/* ========== 登录按钮 ========== */
+.login-btn {
+    width: 100%;
+    padding: 13px 20px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all var(--transition);
+    position: relative;
+    overflow: hidden;
+    letter-spacing: 0.5px;
+}
+
+.login-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, var(--accent-hover), #a67a3e);
+    opacity: 0;
+    transition: opacity var(--transition);
+}
+
+.login-btn:hover::before {
+    opacity: 1;
+}
+
+.login-btn:active {
+    transform: scale(0.98);
+}
+
+.login-btn .btn-text,
+.login-btn .btn-loading {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.login-btn .btn-loading {
+    display: none;
+}
+
+.login-btn.loading .btn-text {
+    display: none;
+}
+
+.login-btn.loading .btn-loading {
+    display: flex;
+}
+
+.login-btn.loading {
+    pointer-events: none;
+    opacity: 0.85;
+}
+
+/* ========== 底部 ========== */
+.login-footer {
+    text-align: center;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.login-footer p {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0;
+    letter-spacing: 0.3px;
+}
+
+/* ========== 响应式适配 ========== */
+
+/* 小平板 & 手机横屏 (576px 以上) */
+@media (min-width: 576px) {
+    .login-card {
+        padding: 44px 40px 28px;
+    }
+}
+
+/* 手机竖屏 (575px 以下) */
+@media (max-width: 575px) {
+    .login-wrapper {
+        padding: 12px;
+    }
+
+    .login-card {
+        padding: 32px 24px 20px;
+        border-radius: 14px;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .system-title {
+        font-size: 19px;
+    }
+
+    .logo-icon {
+        width: 48px;
+        height: 48px;
+        font-size: 20px;
+        margin-bottom: 14px;
+    }
+
+    .tab {
+        font-size: 13px;
+        padding: 8px 12px;
+    }
+
+    .tab i {
+        margin-right: 4px;
+    }
+
+    .input-group-custom .form-control {
+        padding: 11px 14px 11px 38px;
+        font-size: 15px; /* 防止 iOS 缩放 */
+    }
+
+    .login-btn {
+        padding: 12px 16px;
+        font-size: 14px;
+    }
+}
+
+/* 大屏幕适配 （1440px 以上） */
+@media (min-width: 1440px) {
+    .login-card {
+        max-width: 440px;
+        padding: 48px 44px 30px;
+    }
+
+    .system-title {
+        font-size: 24px;
+    }
+}
+
+/* ========== 暗色模式支持 ========== */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-card: rgba(30, 35, 42, 0.97);
+        --input-bg: rgba(255, 255, 255, 0.06);
+        --border-color: rgba(255, 255, 255, 0.1);
+        --text-primary: #e8ecf1;
+        --text-secondary: #a0a8b4;
+        --text-muted: #6b7280;
+        --shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    }
+
+    .tab.active {
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    .input-group-custom .form-control {
+        color: #e8ecf1;
+    }
+
+    .input-group-custom .form-control:focus {
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    .custom-checkbox .checkmark {
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    .login-footer {
+        border-top-color: rgba(255, 255, 255, 0.06);
+    }
+}

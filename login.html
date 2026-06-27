@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线书城后台管理系统 - 登录</title>
+
+    <!-- ==================== 外部资源加载 ==================== -->
+
+    <!-- Google Fonts: Noto Sans SC（简体中文优化字体） -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome 6：图标字体库 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Bootstrap 4.6.2 核心样式 -->
+    <link rel="stylesheet" href="bootstrap-4.6.2-dist/css/bootstrap.min.css">
+
+    <!-- 登录页面自定义样式 -->
+    <link rel="stylesheet" href="css/login.css">
+
+    <!--
+        脚本加载策略说明：
+        - jQuery 和 Bootstrap 依赖链较长，放在 <head> 中同步加载
+        - 确保后续内联脚本执行前 DOM 操作库已就绪
+        - 内联脚本放在 </body> 之前，保证 DOM 已渲染
+    -->
+    <!-- jQuery 3.7.1：DOM 操作 & Ajax 基础库 -->
+    <script src="js/jquery-3.7.1.min.js"></script>
+
+    <!-- Bootstrap 4.6.2 Bundle（包含 Popper.js）：UI 组件支持 -->
+    <script src="bootstrap-4.6.2-dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body>
+
+    <!--
+        外层包裹容器
+        作用：提供垂直居中布局 + 背景遮罩层级控制
+    -->
+    <div class="login-wrapper">
+
+        <!--
+            登录卡片主体
+            包含四个区域：头部、Tab切换、表单区、底部版权
+        -->
+        <div class="login-card">
+
+            <!-- ==================== 1. 头部区域 ==================== -->
+            <header class="login-header">
+                <!-- 书籍图标：金色圆形背景 + 书本图标 -->
+                <div class="logo-icon">
+                    <i class="fas fa-book-open" aria-hidden="true"></i>
+                </div>
+                <h1 class="system-title">在线书城后台管理系统</h1>
+                <p class="system-desc">欢迎回来，请登录您的账号</p>
+            </header>
+
+            <!-- ==================== 2. 登录方式切换 Tab ==================== -->
+            <!--
+                role="tablist": 声明为标签列表容器（无障碍访问）
+                两个切换按钮通过 data-tab 关联对应的表单 ID
+            -->
+            <nav class="tabs" role="tablist" aria-label="登录方式切换">
+                <button class="tab active"
+                        data-tab="username"
+                        role="tab"
+                        aria-selected="true"
+                        aria-controls="usernameForm"
+                        type="button">
+                    <i class="fas fa-user" aria-hidden="true"></i>
+                    用户名登录
+                </button>
+                <button class="tab"
+                        data-tab="phone"
+                        role="tab"
+                        aria-selected="false"
+                        aria-controls="phoneForm"
+                        type="button">
+                    <i class="fas fa-mobile-alt" aria-hidden="true"></i>
+                    手机登录
+                </button>
+            </nav>
+
+            <!-- ==================== 3. 表单区域 ==================== -->
+            <main class="tab-content">
+
+                <!--
+                    ——————————————— 用户名登录表单 ———————————————
+                    属性说明：
+                    - novalidate: 禁用浏览器原生校验，使用自定义 JS 校验
+                    - autocomplete="on": 允许浏览器记住登录凭据
+                -->
+                <form id="usernameForm"
+                      class="login-form active"
+                      novalidate
+                      autocomplete="on"
+                      method="post">
+
+                    <!-- 用户名输入组 -->
+                    <div class="input-group-custom">
+                        <!-- 前置图标 -->
+                        <span class="input-icon" aria-hidden="true">
+                            <i class="fas fa-user"></i>
+                        </span>
+                        <!--
+                            输入框说明：
+                            - type="text": 支持用户名或邮箱
+                            - autocomplete="username": 浏览器凭据管理标识
+                            - required: 必填标记（配合自定义校验）
+                        -->
+                        <input type="text"
+                               name="username"
+                               class="form-control"
+                               placeholder="请输入用户名或邮箱"
+                               required
+                               autocomplete="username">
+                        <!-- 校验失败时显示的提示文字 -->
+                        <div class="invalid-feedback" role="alert">请输入用户名或邮箱</div>
+                    </div>
+
+                    <!-- 密码输入组 -->
+                    <div class="input-group-custom">
+                        <!-- 前置锁图标 -->
+                        <span class="input-icon" aria-hidden="true">
+                            <i class="fas fa-lock"></i>
+                        </span>
+                        <!--
+                            密码框说明：
+                            - autocomplete="current-password": 浏览器密码管理器标识
+                            - id 用于关联密码可见性切换按钮
+                        -->
+                        <input type="password"
+                               name="password"
+                               class="form-control"
+                               placeholder="请输入密码"
+                               required
+                               autocomplete="current-password"
+                               id="usernamePassword">
+                        <!--
+                            密码可见性切换按钮
+                            - tabindex="-1": 不参与 Tab 键导航（使用输入框自带的焦点即可）
+                            - type="button": 防止在表单内触发提交
+                        -->
+                        <button type="button"
+                                class="password-toggle"
+                                tabindex="-1"
+                                aria-label="显示密码">
+                            <i class="far fa-eye" aria-hidden="true"></i>
+                        </button>
+                        <div class="invalid-feedback" role="alert">请输入密码</div>
+                    </div>
+
+                    <!-- 选项行：记住密码 + 忘记密码 -->
+                    <div class="form-options">
+                        <!-- 自定义复选框（隐藏原生 checkbox，使用 CSS 伪元素模拟） -->
+                        <label class="custom-checkbox">
+                            <input type="checkbox" checked>
+                            <span class="checkmark" aria-hidden="true"></span>
+                            记住密码
+                        </label>
+                        <a href="javascript:void(0)" class="forgot-link" title="功能开发中">忘记密码？</a>
+                    </div>
+
+                    <!-- 登录提交按钮 -->
+                    <!--
+                        .btn-text: 默认显示状态
+                        .btn-loading: 加载中状态（通过 .loading 类切换显隐）
+                    -->
+                    <button type="submit" class="login-btn">
+                        <span class="btn-text">
+                            <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
+                            登录
+                        </span>
+                        <span class="btn-loading">
+                            <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                            登录中...
+                        </span>
+                    </button>
+                </form>
+
+                <!--
+                    ——————————————— 手机登录表单 ———————————————
+                    与用户名登录表单结构一致，仅第一个输入框类型不同
+                -->
+                <form id="phoneForm"
+                      class="login-form"
+                      novalidate
+                      autocomplete="on"
+                      method="post">
+
+                    <!-- 手机号输入组 -->
+                    <div class="input-group-custom">
+                        <span class="input-icon" aria-hidden="true">
+                            <i class="fas fa-phone"></i>
+                        </span>
+                        <!--
+                            type="tel": 移动端弹出数字键盘
+                            验证规则：中国大陆手机号 11 位，以 1 开头
+                        -->
+                        <input type="tel"
+                               name="phone"
+                               class="form-control"
+                               placeholder="请输入11位手机号"
+                               required
+                               autocomplete="tel"
+                               maxlength="11">
+                        <div class="invalid-feedback" role="alert">请输入正确的11位手机号</div>
+                    </div>
+
+                    <!-- 密码输入组（结构与用户名表单一致） -->
+                    <div class="input-group-custom">
+                        <span class="input-icon" aria-hidden="true">
+                            <i class="fas fa-lock"></i>
+                        </span>
+                        <input type="password"
+                               name="password"
+                               class="form-control"
+                               placeholder="请输入密码"
+                               required
+                               autocomplete="current-password"
+                               id="phonePassword">
+                        <button type="button"
+                                class="password-toggle"
+                                tabindex="-1"
+                                aria-label="显示密码">
+                            <i class="far fa-eye" aria-hidden="true"></i>
+                        </button>
+                        <div class="invalid-feedback" role="alert">请输入密码</div>
+                    </div>
+
+                    <!-- 选项行 -->
+                    <div class="form-options">
+                        <label class="custom-checkbox">
+                            <input type="checkbox" checked>
+                            <span class="checkmark" aria-hidden="true"></span>
+                            记住密码
+                        </label>
+                        <a href="javascript:void(0)" class="forgot-link" title="功能开发中">忘记密码？</a>
+                    </div>
+
+                    <button type="submit" class="login-btn">
+                        <span class="btn-text">
+                            <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
+                            登录
+                        </span>
+                        <span class="btn-loading">
+                            <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                            登录中...
+                        </span>
+                    </button>
+                </form>
+
+            </main>
+
+            <!-- ==================== 4. 底部版权区域 ==================== -->
+            <footer class="login-footer">
+                <p>&copy; 2026 在线书城 &middot; 后台管理系统</p>
+            </footer>
+
+        </div><!-- /.login-card -->
+    </div><!-- /.login-wrapper -->
+
+    <!-- ==================== 业务逻辑脚本 ==================== -->
+    <script>
+        /**
+         * 登录页面核心交互逻辑
+         *
+         * 功能模块：
+         * 1. Tab 切换 —— 用户名/手机两种登录方式切换
+         * 2. 密码可见性切换 —— 点击眼睛图标显示/隐藏密码
+         * 3. 表单校验 —— 必填字段验证 + 手机号格式验证
+         * 4. 实时错误清除 —— 输入时自动移除错误状态
+         * 5. 回车快捷提交 —— Enter 键提交当前表单
+         * 6. 模拟登录 —— 演示用 Loading 动画 + 页面跳转
+         *
+         * 依赖：jQuery 3.7.1（需在此之前加载）
+         */
+
+        // ======================== DOM 就绪后执行 ========================
+        $(function () {
+
+            // ---------- 缓存常用 jQuery 选择器（减少 DOM 查询开销） ----------
+            const $allTabs        = $('.tab');                 // 所有 Tab 按钮
+            const $allForms       = $('.login-form');          // 所有登录表单
+            const $allToggleBtns  = $('.password-toggle');     // 所有密码可见性切换按钮
+            const $allFormInputs  = $('.login-form input');    // 所有表单输入框
+
+            // ==================== 1. Tab 切换模块 ====================
+            /**
+             * 点击 Tab 按钮时：
+             * - 更新按钮的激活状态和 aria-selected 属性
+             * - 显示对应的表单，隐藏其他表单
+             * - 清除所有输入框的错误提示状态
+             * - 如果已经激活，不做任何操作（幂等性）
+             */
+            $allTabs.on('click', function () {
+                const $tab = $(this);
+
+                // 已经是激活状态则无需处理
+                if ($tab.hasClass('active')) return;
+
+                // 解除所有 Tab 的激活状态
+                $allTabs.removeClass('active').attr('aria-selected', 'false');
+
+                // 激活当前点击的 Tab
+                $tab.addClass('active').attr('aria-selected', 'true');
+
+                // 根据 data-tab 属性找到对应表单并切换
+                const targetId = $tab.data('tab');
+                $allForms.removeClass('active');
+                $('#' + targetId + 'Form').addClass('active');
+
+                // 切换 Tab 时清除所有错误状态，避免残留提示
+                $('.is-invalid').removeClass('is-invalid');
+            });
+
+            // ==================== 2. 密码可见性切换模块 ====================
+            /**
+             * 点击"眼睛"图标时：
+             * - 切换密码框的 type 属性（password ↔ text）
+             * - 切换图标样式（睁眼 fa-eye ↔ 闭眼 fa-eye-slash）
+             * - 同步更新 aria-label 提示当前操作
+             */
+            $allToggleBtns.on('click', function () {
+                const $btn   = $(this);
+                const $input = $btn.siblings('input');   // 相邻的输入框
+                const $icon  = $btn.find('i');            // 图标元素
+
+                // 判断当前密码是否可见
+                const isPassword = $input.attr('type') === 'password';
+
+                if (isPassword) {
+                    // 显示密码
+                    $input.attr('type', 'text');
+                    $icon.removeClass('fa-eye').addClass('fa-eye-slash');
+                    $btn.attr('aria-label', '隐藏密码');
+                } else {
+                    // 隐藏密码
+                    $input.attr('type', 'password');
+                    $icon.removeClass('fa-eye-slash').addClass('fa-eye');
+                    $btn.attr('aria-label', '显示密码');
+                }
+            });
+
+            // ==================== 3. 表单提交校验模块 ====================
+            /**
+             * 提交表单时：
+             * - 阻止浏览器默认提交行为
+             * - 遍历所有 required 输入框，检查是否为空
+             * - 手机号表单额外校验号码格式
+             * - 验证失败时聚焦第一个错误字段
+             * - 验证通过后进入模拟登录流程
+             */
+            $allForms.on('submit', function (event) {
+                event.preventDefault();
+
+                const $form   = $(this);
+                const $inputs = $form.find('input[required]');
+                let   isValid = true;
+
+                // 第一步：清除上次遗留的所有错误状态
+                $form.find('.is-invalid').removeClass('is-invalid');
+
+                // 第二步：逐字段验证
+                $inputs.each(function () {
+                    const $input = $(this);
+                    const value  = $input.val().trim();
+
+                    // 2.1 必填检查
+                    if (value === '') {
+                        $input.addClass('is-invalid');
+                        isValid = false;
+                        return; // 跳过空值字段的后续检查
+                    }
+
+                    // 2.2 手机号格式检查（仅对 type="tel" 的字段生效）
+                    if ($input.attr('type') === 'tel') {
+                        // 中国大陆手机号：1 开头，共 11 位数字
+                        const phoneRegex = /^1[3-9]\d{9}$/;
+                        if (!phoneRegex.test(value)) {
+                            $input.addClass('is-invalid');
+                            isValid = false;
+                        }
+                    }
+
+                    // 2.3 密码最小长度检查（至少 6 位）
+                    if ($input.attr('type') === 'password' && value.length < 6) {
+                        $input.addClass('is-invalid');
+                        // 设置密码专用的错误提示
+                        $input.siblings('.invalid-feedback').text('密码长度不能少于6位');
+                        isValid = false;
+                    }
+                });
+
+                // 第三步：有错误时聚焦第一个错误字段并中断
+                if (!isValid) {
+                    $form.find('.is-invalid').first().focus();
+                    return;
+                }
+
+                // 第四步：模拟登录 —— 显示 Loading 状态
+                const $btn = $form.find('.login-btn');
+                $btn.addClass('loading');
+
+                // 1.2 秒后跳转到后台首页
+                setTimeout(function () {
+                    $btn.removeClass('loading');
+                    // TODO: 接入真实认证 API 后替换此行为
+                    window.location.href = 'index.html';
+                }, 1200);
+            });
+
+            // ==================== 4. 实时清除错误状态模块 ====================
+            /**
+             * 输入框内容变化时自动移除错误样式
+             * 提升用户体验 —— 无需手动关闭错误提示
+             */
+            $allFormInputs.on('input', function () {
+                const $input = $(this);
+                if ($input.hasClass('is-invalid')) {
+                    $input.removeClass('is-invalid');
+                    // 恢复密码字段默认错误文案
+                    if ($input.attr('type') === 'password' || $input.is('[id$="Password"]')) {
+                        $input.siblings('.invalid-feedback').text('请输入密码');
+                    }
+                }
+            });
+
+            // ==================== 5. 回车键快捷提交模块 ====================
+            /**
+             * 在任意表单输入框内按下 Enter 键时触发所在表单的 submit
+             * 注意：不阻止默认的 Enter 提交行为，而是显式调用以保持一致性
+             */
+            $allFormInputs.on('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    // 防止某些浏览器在 password 字段 Enter 时的特殊行为
+                    e.preventDefault();
+                    $(this).closest('form').submit();
+                }
+            });
+
+        }); // End of $(function)
+    </script>
+
+</body>
+</html>

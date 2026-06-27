@@ -1,0 +1,94 @@
+/* 容器基础样式 */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+/* 容器内容区域样式 */
+.modal-content {
+    background-color: #fefefe;
+    margin: 15% auto;
+    padding: 20px;
+    border: 1px solid #888888;
+    width: 30%;
+}
+
+/* 关闭按钮样式 */
+.close {
+    color: #aaaaaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.close:hover, .close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+/* 添加和编辑表单样式 */
+#add-category-form, #edit-category-form{
+    margin-top: 3px;
+}
+/* 单行文本框样式 */
+#add-category-form input, #edit-category-form input{
+    padding: 8px;
+    margin-bottom: 10px;
+}
+#search-input{
+    padding: 8px;
+    margin-bottom: 10px;
+}
+/* 按钮样式 */
+button {
+    padding: 7px;
+    margin-left: 10px;
+}
+
+/* 表格样式 */
+#category-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+#category-table th, #category-table td {
+    border: 1px solid #dddddd;
+    padding: 8px;
+    text-align: left;
+}
+
+#category-table th {
+    background-color: #f2f2f2;
+}
+
+/* 编辑和删除按钮样式 */
+.btn-edit {
+    background-color: #f39c12;
+    color: white;
+    padding: 6px 10px;
+    font-size: 12px;
+    margin-right: 1px;
+}
+
+.btn-edit:hover {
+    background-color: #e67e22;
+}
+
+.btn-delete {
+    background-color: #e74c3c;
+    color: white;
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
+.btn-delete:hover {
+    background-color: #c0392b;
+}

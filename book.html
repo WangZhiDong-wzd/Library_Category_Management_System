@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图书列表页面</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="bootstrap-4.6.2-dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+    <link rel="stylesheet" href="css/book.css">
+    <!-- jQuery -->
+    <script src="js/jquery-3.7.1.min.js"></script>
+    <script src="js/jquery-ui.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="bootstrap-4.6.2-dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- 页面标题 -->
+        <h1 class="page-title">图书列表</h1>
+
+        <!-- 搜索与操作区域 -->
+        <div class="search-section">
+            <label for="search-input" class="sr-only">搜索图书</label>
+            <input type="text" id="search-input" placeholder="请输入图书名称或ISBN">
+            <button id="search-btn" class="btn btn-primary">搜索</button>
+            <button id="add-btn" class="btn btn-success">添加图书</button>
+        </div>
+
+        <!-- 图书表格 -->
+        <div class="table-container">
+            <table id="book-table">
+                <thead>
+                    <tr>
+                        <th>ISBN</th>
+                        <th>书名</th>
+                        <th>作者</th>
+                        <th>分类</th>
+                        <th>价格</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 图书信息动态渲染 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * 图书数据结构说明
+         * 每本图书是一个对象，包含以下字段：
+         * {
+         *   isbn:    string  - 国际标准书号，格式如 "978-7-1234-5678-9"
+         *   title:   string  - 图书名称
+         *   author:  string  - 作者
+         *   category: string - 分类，如 "计算机"
+         *   price:   string  - 价格，保留两位小数，如 "99.00"
+         * }
+         */
+
+        $(document).ready(function () {
+
+            // ============================================================
+            // 一、缓存 jQuery 选择器：避免重复查询 DOM，提升性能
+            // ============================================================
+            const $bookTableBody = $("#book-table tbody");
+            const $searchInput   = $("#search-input");
+            const $searchBtn     = $("#search-btn");
+            const $addBtn        = $("#add-btn");
+            const $bookTable     = $("#book-table");
+            const $body          = $("body");
+
+            // ============================================================
+            // 二、数据初始化：优先从 localStorage 加载，若无则使用默认模拟数据
+            // ============================================================
+            const STORAGE_KEY = "library_books";
+
+            /** 默认模拟图书数据（14本计算机类图书） */
+            const DEFAULT_BOOKS = [
+                { isbn: "978-7-1234-5678-9", title: "JavaScript高级程序设计", author: "尼古拉斯·扎卡斯", category: "计算机", price: "99.00" },
+                { isbn: "978-7-9876-5432-1", title: "Python编程:从入门到实践", author: "埃里克·马瑟斯", category: "计算机", price: "89.00" },
+                { isbn: "978-7-1111-2222-3", title: "算法导论", author: "托马斯·科尔曼", category: "计算机", price: "128.00" },
+                { isbn: "978-7-2222-3333-4", title: "深入理解计算机系统", author: "Randal E. Bryant", category: "计算机", price: "139.00" },
+                { isbn: "978-7-3333-4444-5", title: "Java核心技术", author: "Cay S. Horstmann", category: "计算机", price: "149.00" },
+                { isbn: "978-7-4444-5555-6", title: "设计模式", author: "Erich Gamma", category: "计算机", price: "89.00" },
+                { isbn: "978-7-5555-6666-7", title: "数据结构与算法分析", author: "Mark Allen Weiss", category: "计算机", price: "109.00" },
+                { isbn: "978-7-6666-7777-8", title: "计算机网络", author: "Andrew S. Tanenbaum", category: "计算机", price: "129.00" },
+                { isbn: "978-7-7777-8888-9", title: "操作系统概念", author: "Abraham Silberschatz", category: "计算机", price: "119.00" },
+                { isbn: "978-7-8888-9999-0", title: "编译原理", author: "Alfred V. Aho", category: "计算机", price: "139.00" },
+                { isbn: "978-7-9999-0000-1", title: "人工智能：一种现代的方法", author: "Stuart Russell", category: "计算机", price: "159.00" },
+                { isbn: "978-7-0000-1111-2", title: "网络安全基础", author: "William Stallings", category: "计算机", price: "99.00" }
+            ];
+
+            /**
+             * 从 localStorage 加载图书数据
+             * 使用 try/catch 包裹，防止 localStorage 不可用或数据损坏时崩溃
+             * @returns {Array} 图书数组
+             */
+            function loadBooksFromStorage() {
+                try {
+                    const stored = localStorage.getItem(STORAGE_KEY);
+                    if (stored) {
+                        const parsed = JSON.parse(stored);
+                        // 确保解析结果是数组
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            return parsed;
+                        }
+                    }
+                } catch (e) {
+                    // localStorage 读取失败（如隐私模式、配额耗尽），静默降级到默认数据
+                    console.warn("从 localStorage 加载图书数据失败，使用默认数据:", e.message);
+                }
+                return DEFAULT_BOOKS.slice(); // 返回默认数据的副本，避免外部修改影响原始默认值
+            }
+
+            /**
+             * 将图书数据保存到 localStorage
+             * 使用 try/catch 包裹，防止存储空间不足等异常
+             * @param {Array} bookList - 要保存的图书数组
+             */
+            function saveBooksToStorage(bookList) {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(bookList));
+                } catch (e) {
+                    // localStorage 写入失败（如配额耗尽），仅打印警告，不影响内存中的数据
+                    console.warn("保存图书数据到 localStorage 失败:", e.message);
+                }
+            }
+
+            // 初始化全局图书数组（从 localStorage 或默认数据加载）
+            let books = loadBooksFromStorage();
+
+            // ============================================================
+            // 三、表格渲染：将图书数组渲染为 HTML 表格行
+            // ============================================================
+            /**
+             * 渲染图书列表到表格
+             * 使用 jQuery DOM 创建方式，避免字符串拼接带来的 XSS 风险
+             * @param {Array} bookList - 要渲染的图书数组
+             */
+            function renderBooks(bookList) {
+                // 清空现有表格内容
+                $bookTableBody.empty();
+
+                // 如果没有数据，显示提示行
+                if (!bookList || bookList.length === 0) {
+                    const $emptyRow = $("<tr>");
+                    const $emptyCell = $("<td>")
+                        .attr("colspan", 6)
+                        .css("text-align", "center")
+                        .text("暂无图书数据");
+                    $emptyRow.append($emptyCell);
+                    $bookTableBody.append($emptyRow);
+                    return;
+                }
+
+                // 逐行构建表格，使用 jQuery DOM 方法避免 XSS
+                bookList.forEach(function (book) {
+                    const $row = $("<tr>");
+
+                    // 使用 .text() 设置文本内容，自动转义 HTML，防止 XSS 攻击
+                    $row.append($("<td>").text(book.isbn));
+                    $row.append($("<td>").text(book.title));
+                    $row.append($("<td>").text(book.author));
+                    $row.append($("<td>").text(book.category));
+                    $row.append($("<td>").text(book.price));
+
+                    // 操作按钮列：使用 jQuery 创建按钮元素
+                    const $actions = $("<td>");
+                    const $editBtn = $("<button>")
+                        .addClass("btn btn-edit")
+                        .text("编辑");
+                    const $deleteBtn = $("<button>")
+                        .addClass("btn btn-delete")
+                        .text("删除");
+                    $actions.append($editBtn).append($deleteBtn);
+                    $row.append($actions);
+
+                    $bookTableBody.append($row);
+                });
+
+                // 渲染完成后保存到 localStorage
+                saveBooksToStorage(books);
+            }
+
+            // 首次渲染
+            renderBooks(books);
+
+            // ============================================================
+            // 四、jQuery UI Sortable：拖拽排序
+            // ============================================================
+            /**
+             * 初始化表格行的拖拽排序功能
+             * 使用 jQuery UI sortable 插件实现垂直方向拖拽
+             * 排序变化时收集新的 ISBN 顺序并通过 AJAX 发送到服务器
+             */
+            $bookTableBody.sortable({
+                axis: "y",          // 限制仅垂直方向拖动
+                cursor: "move",     // 拖动时光标样式
+                update: function () {
+                    // 排序变化后，按当前 DOM 顺序收集所有图书的 ISBN 和位置
+                    const newOrder = [];
+                    $bookTableBody.find("tr").each(function (index) {
+                        const isbn = $(this).find("td:first").text();
+                        newOrder.push({ isbn: isbn, order: index + 1 });
+                    });
+
+                    // TODO: 将硬编码的 AJAX URL 替换为可配置的后端接口地址
+                    $.ajax({
+                        url: "http://localhost:3000/api/updateOrder",
+                        method: "POST",
+                        contentType: "application/json",
+                        data: JSON.stringify(newOrder),
+                        success: function (response) {
+                            console.log("排序更新成功:", response);
+                        },
+                        error: function (xhr, status, error) {
+                            console.error("排序更新失败:", error);
+                        }
+                    });
+                }
+            }).disableSelection();
+
+            // ============================================================
+            // 五、搜索功能：根据书名或 ISBN 过滤图书
+            // ============================================================
+            /**
+             * 执行搜索过滤
+             * 同时匹配书名（忽略大小写）和 ISBN（精确包含）
+             * 搜索结果直接重新渲染表格
+             */
+            function performSearch() {
+                const searchTerm = $searchInput.val().toLowerCase().trim();
+
+                // 如果搜索词为空，显示全部图书
+                if (searchTerm === "") {
+                    renderBooks(books);
+                    return;
+                }
+
+                // 过滤匹配的图书：书名模糊匹配 或 ISBN 包含匹配
+                const filteredBooks = books.filter(function (book) {
+                    return book.title.toLowerCase().includes(searchTerm) ||
+                        book.isbn.includes(searchTerm);
+                });
+                renderBooks(filteredBooks);
+            }
+
+            // 点击搜索按钮触发搜索
+            $searchBtn.click(performSearch);
+
+            // 在搜索框内按回车键触发搜索
+            $searchInput.keypress(function (event) {
+                if (event.which === 13) {
+                    performSearch();
+                }
+            });
+
+            // ============================================================
+            // 六、添加图书（模拟新增）
+            // ============================================================
+            /**
+             * 点击"添加图书"按钮，生成一条新的模拟图书数据
+             * 实际项目中应弹出表单由用户填写后提交
+             */
+            $addBtn.click(function () {
+                // 生成随机 ISBN（模拟）
+                const randomSuffix = Math.floor(Math.random() * 10000000000)
+                    .toString()
+                    .padStart(10, "0");
+                const newBook = {
+                    isbn: "978-7-" + randomSuffix,
+                    title: "新添加的图书",
+                    author: "未知作者",
+                    category: "未知分类",
+                    price: "0.00"
+                };
+
+                // 添加到数据数组并重新渲染
+                books.push(newBook);
+                renderBooks(books);
+                alert("图书添加成功！");
+            });
+
+            // ============================================================
+            // 七、编辑图书：通过弹窗修改图书信息
+            // ============================================================
+            /**
+             * 编辑图书按钮点击事件
+             * 使用事件委托绑定，支持动态生成的按钮
+             * 通过 jQuery DOM 创建编辑弹窗，避免字符串拼接造成的 XSS 风险
+             */
+            $bookTable.on("click", ".btn-edit", function () {
+                const $row = $(this).closest("tr");
+                const isbn  = $row.find("td:first").text();
+                const book  = books.find(function (b) { return b.isbn === isbn; });
+
+                if (!book) {
+                    return;
+                }
+
+                // ---------- 编辑前确认 ----------
+                if (!confirm("确定要编辑图书「" + book.title + "」吗？")) {
+                    return;
+                }
+
+                // ---------- 使用 jQuery DOM 创建编辑弹窗，杜绝 XSS ----------
+                // 外层容器，添加 ARIA 属性以提升无障碍访问性
+                const $modal = $("<div>")
+                    .addClass("edit-modal")
+                    .attr("role", "dialog")
+                    .attr("aria-modal", "true")
+                    .attr("aria-labelledby", "edit-modal-title");
+
+                // 弹窗标题
+                const $title = $("<h3>")
+                    .attr("id", "edit-modal-title")
+                    .text("编辑图书");
+
+                // 表单容器
+                const $form = $("<form>").attr("id", "edit-form");
+
+                // 价格输入组
+                const $priceGroup = $("<div>").addClass("form-group");
+                const $priceLabel = $("<label>").attr("for", "edit-price").text("价格：");
+                const $priceInput = $("<input>")
+                    .attr({ type: "text", id: "edit-price" })
+                    .val(book.price);   // 使用 .val() 安全设置值，不经过 HTML 字符串
+                $priceGroup.append($priceLabel, $priceInput);
+
+                // 分类输入组
+                const $categoryGroup = $("<div>").addClass("form-group");
+                const $categoryLabel = $("<label>").attr("for", "edit-category").text("分类：");
+                const $categoryInput = $("<input>")
+                    .attr({ type: "text", id: "edit-category" })
+                    .val(book.category); // 使用 .val() 安全设置值
+                $categoryGroup.append($categoryLabel, $categoryInput);
+
+                // 操作按钮组
+                const $actions = $("<div>").addClass("form-actions");
+                const $saveBtn   = $("<button>").attr({ type: "button", id: "save-edit" }).text("保存");
+                const $cancelBtn = $("<button>").attr({ type: "button", id: "cancel-edit" }).text("取消");
+                $actions.append($saveBtn, $cancelBtn);
+
+                // 组装表单
+                $form.append($priceGroup, $categoryGroup, $actions);
+                // 组装弹窗
+                $modal.append($title, $form);
+
+                // 遮罩层（点击遮罩也可关闭）
+                const $overlay = $("<div>").addClass("overlay");
+
+                // 插入到页面
+                $body.append($overlay, $modal);
+
+                // ---------- 保存编辑：写入数据并重新渲染 ----------
+                $saveBtn.click(function () {
+                    // 保存前二次确认
+                    if (!confirm("确认保存对图书「" + book.title + "」的修改吗？")) {
+                        return;
+                    }
+
+                    // 从 DOM 元素读取用户输入的值（.val() 返回的是字符串，不存在 HTML 注入风险）
+                    book.price    = $priceInput.val();
+                    book.category = $categoryInput.val();
+
+                    // 重新渲染表格
+                    renderBooks(books);
+
+                    // 移除弹窗和遮罩
+                    $modal.remove();
+                    $overlay.remove();
+
+                    alert("图书编辑成功！");
+                });
+
+                // ---------- 取消编辑：直接关闭弹窗 ----------
+                $cancelBtn.click(function () {
+                    $modal.remove();
+                    $overlay.remove();
+                });
+
+                // ---------- 点击遮罩层关闭弹窗 ----------
+                $overlay.click(function () {
+                    $modal.remove();
+                    $overlay.remove();
+                });
+            });
+
+            // ============================================================
+            // 八、删除图书：确认后从数组中移除
+            // ============================================================
+            /**
+             * 删除图书按钮点击事件
+             * 使用事件委托绑定，弹出确认对话框后执行删除
+             */
+            $bookTable.on("click", ".btn-delete", function () {
+                if (!confirm("确定要删除这本书吗？")) {
+                    return;
+                }
+
+                const $row = $(this).closest("tr");
+                const isbn = $row.find("td:first").text();
+                const index = books.findIndex(function (b) { return b.isbn === isbn; });
+
+                if (index !== -1) {
+                    books.splice(index, 1);
+                    renderBooks(books);
+                    alert("图书删除成功！");
+                }
+            });
+
+        });
+    </script>
+</body>
+</html>

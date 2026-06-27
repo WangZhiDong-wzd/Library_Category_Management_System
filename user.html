@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户列表页面</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="bootstrap-4.6.2-dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/user.css">
+    <!-- jQuery -->
+    <script src="js/jquery-3.7.1.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="bootstrap-4.6.2-dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- 页面标题 -->
+        <h1 class="page-title">用户列表</h1>
+
+        <!-- 搜索与操作区域 -->
+        <div class="search-section">
+            <label for="search-input">搜索用户：</label>
+            <input type="text" id="search-input" placeholder="请输入用户名或邮箱">
+            <button id="search-btn" class="btn btn-primary">搜索</button>
+            <button id="clear-btn" class="btn btn-secondary">清空</button>
+            <a href="./userAdd.html" class="btn btn-success">添加用户</a>
+        </div>
+
+        <!-- 用户表格 -->
+        <div class="table-container">
+            <table id="user-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>用户名</th>
+                        <th>邮箱</th>
+                        <th>角色</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 用户信息动态渲染 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * 用户数据结构（每条记录包含以下字段）:
+         *
+         * {
+         *   id: number,         // 唯一标识符，自增整数
+         *   username: string,   // 用户名，用于登录和显示
+         *   email: string,      // 邮箱地址，用于联系和搜索过滤
+         *   role: string        // 角色名称，如 "管理员"、"普通用户"
+         * }
+         *
+         * 所有用户数据以 JSON 数组形式存储在 localStorage 的 "users" 键中。
+         * 若 localStorage 中无数据，则使用下方的默认模拟数据初始化。
+         */
+
+        $(document).ready(function () {
+
+            // ============================================================
+            // 1. 缓存 jQuery 选择器，避免重复查询 DOM，提升性能
+            // ============================================================
+            const $tableBody   = $('#user-table tbody');
+            const $searchInput = $('#search-input');
+            const $searchBtn   = $('#search-btn');
+            const $clearBtn    = $('#clear-btn');
+
+            // ============================================================
+            // 2. 用户数据：先定义默认模拟数据，再从 localStorage 读取
+            //    若读取失败（数据损坏/不存在），则回退到默认数据并写入 localStorage
+            // ============================================================
+            const defaultUsers = [
+                { id: 1, username: "admin", email: "admin@example.com", role: "管理员" },
+                { id: 2, username: "user1", email: "user1@example.com", role: "普通用户" }
+            ];
+
+            // users 需要被重新赋值（从 localStorage 加载或删除时过滤），因此使用 let
+            let users;
+
+            // 使用 try/catch 包裹 localStorage 操作，防止用户隐私模式或存储满时抛出异常
+            try {
+                const storedUsers = localStorage.getItem('users');
+                if (storedUsers) {
+                    // localStorage 中存在数据，解析 JSON 并赋值
+                    users = JSON.parse(storedUsers);
+                } else {
+                    // 无数据时使用默认模拟数据，并写入 localStorage 完成初始化
+                    users = defaultUsers;
+                    localStorage.setItem('users', JSON.stringify(users));
+                }
+            } catch (e) {
+                // 解析失败或存储异常时，回退到默认数据并在控制台输出错误信息，方便调试
+                console.error('从 localStorage 读取用户数据失败:', e);
+                users = defaultUsers;
+            }
+
+            // ============================================================
+            // 3. 渲染用户表格 —— 使用 jQuery DOM 创建方式，杜绝 XSS 风险
+            //    不再使用字符串拼接 innerHTML，所有用户输入字段通过 .text() 设置
+            // ============================================================
+            function renderUsers(usersList) {
+                // 清空表格体
+                $tableBody.empty();
+
+                // 遍历用户列表，逐行构建 DOM
+                usersList.forEach(function (user) {
+                    const $row = $('<tr>'); // 创建行
+
+                    // 创建各列，使用 .text() 安全设置内容，防止 XSS
+                    const $tdId   = $('<td>').text(user.id);
+                    const $tdName = $('<td>').text(user.username);
+                    const $tdMail = $('<td>').text(user.email);
+                    const $tdRole = $('<td>').text(user.role);
+
+                    // 操作列：编辑按钮与删除按钮，通过 data-id 属性存放用户 ID
+                    const $tdActions = $('<td>');
+                    $tdActions.append(
+                        $('<button>')
+                            .addClass('btn btn-edit')
+                            .attr('data-id', user.id)
+                            .text('编辑')
+                    );
+                    $tdActions.append(
+                        $('<button>')
+                            .addClass('btn btn-delete')
+                            .attr('data-id', user.id)
+                            .text('删除')
+                    );
+
+                    // 将所有列追加到行中
+                    $row.append($tdId, $tdName, $tdMail, $tdRole, $tdActions);
+
+                    // 将完整的行追加到表格体
+                    $tableBody.append($row);
+                });
+            }
+
+            // 首次渲染：将当前用户数据展示到表格
+            renderUsers(users);
+
+            // ============================================================
+            // 4. 搜索功能 —— 支持点击搜索按钮 与 输入框实时过滤
+            //    根据用户名、邮箱、角色进行模糊匹配（不区分大小写）
+            // ============================================================
+            function performSearch() {
+                // 获取搜索词，转为小写并去除首尾空格
+                const searchTerm = $searchInput.val().toLowerCase().trim();
+
+                if (searchTerm === '') {
+                    // 搜索词为空时展示全部用户
+                    renderUsers(users);
+                } else {
+                    // 筛选匹配的用户
+                    const filteredUsers = users.filter(function (user) {
+                        return user.username.toLowerCase().includes(searchTerm) ||
+                               user.email.toLowerCase().includes(searchTerm) ||
+                               user.role.toLowerCase().includes(searchTerm);
+                    });
+                    // 渲染过滤后的结果
+                    renderUsers(filteredUsers);
+                }
+            }
+
+            // 点击"搜索"按钮触发搜索
+            $searchBtn.on('click', function () {
+                performSearch();
+            });
+
+            // 输入框内容变化时实时过滤（即时搜索体验）
+            $searchInput.on('input', function () {
+                performSearch();
+            });
+
+            // 点击"清空"按钮：清空输入框并恢复显示全部用户
+            $clearBtn.on('click', function () {
+                $searchInput.val('');
+                renderUsers(users);
+            });
+
+            // ============================================================
+            // 5. 编辑与删除操作 —— 使用 jQuery 事件委托
+            //    通过 $(document).on(...) 绑定事件，不再使用全局 window 函数
+            //    和行内 onclick 属性，保持全局作用域干净
+            // ============================================================
+
+            // 编辑用户：点击 .btn-edit 按钮时，跳转到编辑页面并携带用户 ID
+            $(document).on('click', '.btn-edit', function () {
+                const id = $(this).data('id'); // 从 data-id 属性获取用户 ID
+
+                if (window.self !== window.top) {
+                    // 当前页面在 iframe 中时，修改父级 main 框架的地址
+                    window.parent.frames['main'].location.href = 'userEdit.html?id=' + id;
+                } else {
+                    // 独立浏览时直接跳转
+                    window.location.href = 'userEdit.html?id=' + id;
+                }
+            });
+
+            // 删除用户：点击 .btn-delete 按钮时，弹出确认框后从数据中移除并更新存储
+            $(document).on('click', '.btn-delete', function () {
+                const id = $(this).data('id'); // 从 data-id 属性获取用户 ID
+
+                // 确认对话框，防止误删
+                if (!confirm('确定要删除这个用户吗？')) {
+                    return;
+                }
+
+                // 过滤掉被删除的用户
+                users = users.filter(function (user) {
+                    return user.id !== id;
+                });
+
+                // 将更新后的用户数组保存回 localStorage
+                try {
+                    localStorage.setItem('users', JSON.stringify(users));
+                } catch (e) {
+                    console.error('删除用户后保存到 localStorage 失败:', e);
+                }
+
+                // 重新渲染表格，反映删除后的数据
+                renderUsers(users);
+            });
+
+        });
+    </script>
+</body>
+</html>

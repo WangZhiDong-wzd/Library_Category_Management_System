@@ -1,0 +1,54 @@
+/* 全局样式 */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 30px;
+}
+
+/* 页面容器 */
+.container {
+    width: calc(100vw - 250px);
+}
+
+/* 页面标题 */
+h1 {
+    text-align: left;
+    color: black;
+}
+
+/* 表单标签 */
+form label {
+    display: block;
+    margin-bottom: 5px;
+    margin-top: 20px;
+    color: #666666;
+}
+
+/* 表单输入框和下拉框 */
+form input[type="text"], form input[type="number"],
+form select, form input[type="file"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #cccccc;
+    border-radius: 3px;
+}
+
+/* 提交按钮 */
+form button {
+    background-color: dodgerblue;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 3px;
+    margin-top: 20px;
+}
+
+/* 按钮 hover 效果 */
+.hover {
+    background-color: royalblue;
+}
+
+/* 错误提示信息 */
+.error {
+    color: red;
+}

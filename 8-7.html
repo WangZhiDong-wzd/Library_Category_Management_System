@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图书分类管理系统 - 胶囊式导航</title>
+    <link rel="stylesheet" href="bootstrap-4.6.2-dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/8-7.css">
+</head>
+<body>
+    <!--
+        整体布局说明：
+        本页面使用 Bootstrap 的胶囊式（pill）导航组件实现标签页切换功能。
+        与 8-6.html 使用 data-toggle="tab" 声明式方式的本质区别在于：
+        - 8-6.html 依赖 Bootstrap 的 data-* 属性自动绑定事件，无需手写 JS，
+          只需在 HTML 标签上添加 data-toggle="tab" 属性，Bootstrap 会自动
+          拦截点击事件并调用 .tab('show') 方法。这种方式代码更简洁，适合
+          简单的标签页场景。
+        - 本文件（8-7.html）采用 JavaScript 编程式方式，通过 jQuery 手动
+          绑定 click 事件并显式调用 .tab('show') 方法。这种方式虽然多写了
+          JS 代码，但提供了更大的灵活性：可以在切换前执行自定义逻辑（如
+          表单验证、异步数据加载、确认对话框），也可以在切换后触发回调。
+          适合需要精细控制标签页行为的复杂业务场景。
+    -->
+
+    <!--
+        主内容区域：使用 <main> 语义元素包裹页面的核心内容，
+        表示文档中唯一且主要的内容区块，有助于屏幕阅读器
+        快速定位关键内容区域。
+        role="main" 为 ARIA 地标角色，进一步增强可访问性。
+    -->
+    <main role="main">
+        <div class="container-custom">
+
+            <!--
+                胶囊式导航容器：
+                使用 <nav> 语义元素包裹导航链接，表示该区域为页面导航功能区。
+                nav-pills 是 Bootstrap 提供的胶囊式导航样式类，与 nav-tabs（选项卡式）
+                的区别在于视觉效果：nav-pills 呈现为圆角胶囊按钮状，
+                nav-tabs 呈现为传统的方角标签页样式。
+            -->
+            <nav aria-label="主要导航" class="nav-container">
+                <!--
+                    <ul> 标签承载导航链接列表：
+                    - role="tablist"：告知辅助技术该列表为标签页容器
+                    - class="nav nav-pills"：Bootstrap 胶囊式导航样式，
+                      nav-pills 让每个导航项表现为独立的胶囊按钮，
+                      选中项会有高亮背景色（在 8-7.css 中定义），
+                      呈现圆角填充效果，视觉上与普通标签页区分明显。
+                -->
+                <ul class="nav nav-pills" role="tablist">
+                    <!--
+                        每个 <li> 代表一个导航项：
+                        - role="presentation"：移除列表项的语义，
+                          让辅助技术将注意力集中在内部的 role="tab" 元素上，
+                          避免屏幕阅读器将列表结构干扰标签页的交互语义。
+                    -->
+                    <li class="nav-item" role="presentation">
+                        <!--
+                            首页标签：
+                            - role="tab"：标识该元素为标签页的切换控件
+                            - aria-selected="true"：表示该标签当前处于激活/选中状态
+                            - href="#index"：通过锚点关联下方的 .tab-pane#index
+                            - class="nav-link active"：Bootstrap 激活样式，视觉高亮
+                            - data-toggle="tab"：保留此属性作为备用（本页虽用 JS 控制，
+                              但保留 data-toggle 可作为无 JS 环境下的优雅降级）
+                            - id="tab-index"：供下方 tabpanel 的 aria-labelledby 引用
+                        -->
+                        <a class="nav-link active"
+                           id="tab-index"
+                           data-toggle="tab"
+                           href="#index"
+                           role="tab"
+                           aria-selected="true">首页</a>
+                    </li>
+                    <!--
+                        主要业务标签：
+                        - role="presentation" 在 <li> 上去语义
+                        - role="tab" 在 <a> 上声明该控件为标签切换按钮
+                        - aria-selected="false"：当前未选中状态
+                    -->
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link"
+                           id="tab-course"
+                           data-toggle="tab"
+                           href="#course"
+                           role="tab"
+                           aria-selected="false">主要业务</a>
+                    </li>
+                    <!-- 技术支持标签 -->
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link"
+                           id="tab-help"
+                           data-toggle="tab"
+                           href="#help"
+                           role="tab"
+                           aria-selected="false">技术支持</a>
+                    </li>
+                    <!-- 关于我们标签 -->
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link"
+                           id="tab-about"
+                           data-toggle="tab"
+                           href="#about"
+                           role="tab"
+                           aria-selected="false">关于我们</a>
+                    </li>
+                </ul>
+            </nav>
+
+            <!--
+                标签页内容区域（.tab-content）：
+                包含所有标签窗格（.tab-pane），同一时刻只有一个窗格可见。
+                Bootstrap 通过 .active 类控制显示：拥有 .active 的窗格
+                为 visibility: visible，其余为 display: none。
+            -->
+            <div class="tab-content">
+
+                <!--
+                    首页内容窗格：
+                    - role="tabpanel"：声明该区域为标签面板内容
+                    - aria-labelledby="tab-index"：关联上方 id="tab-index" 的切换控件，
+                      让屏幕阅读器能明确该面板由哪个标签控制
+                    - class="tab-pane active"：Bootstrap 默认显示此窗格
+                    - 使用 <section> 语义元素包裹独立的内容区块
+                -->
+                <section class="tab-pane active"
+                         id="index"
+                         role="tabpanel"
+                         aria-labelledby="tab-index">
+                    <!--
+                        首页展示系统的核心功能介绍和特色服务列表。
+                        包含欢迎标题、系统简介文字和四个核心功能特性。
+                    -->
+                    <h2 class="content-title">欢迎使用图书分类管理系统</h2>
+                    <p class="content-text">这是一个现代化的图书分类管理系统，提供高效的图书管理和分类服务。系统采用先进的技术架构，确保数据安全和操作便捷。</p>
+                    <ul class="feature-list">
+                        <li>智能分类管理</li>
+                        <li>快速检索功能</li>
+                        <li>数据统计分析</li>
+                        <li>用户权限管理</li>
+                    </ul>
+                </section>
+
+                <!--
+                    主要业务内容窗格：
+                    - aria-labelledby="tab-course"：关联"主要业务"标签控件
+                    - 展示系统提供的五大核心业务模块
+                -->
+                <section class="tab-pane"
+                         id="course"
+                         role="tabpanel"
+                         aria-labelledby="tab-course">
+                    <!--
+                        主要业务页面展示图书管理的全流程服务，
+                        从采购入库到编目分类，再到借阅流程和库存盘点，
+                        覆盖图书馆日常运营的各环节。
+                    -->
+                    <h2 class="content-title">主要业务</h2>
+                    <p class="content-text">我们提供全方位的图书管理服务，包括图书采购、分类编目、借阅管理等核心功能。</p>
+                    <ul class="feature-list">
+                        <li>图书采购与入库</li>
+                        <li>分类编目管理</li>
+                        <li>借阅流程管理</li>
+                        <li>库存盘点统计</li>
+                        <li>读者信息管理</li>
+                    </ul>
+                </section>
+
+                <!--
+                    技术支持内容窗格：
+                    - aria-labelledby="tab-help"：关联"技术支持"标签控件
+                    - 展示用户可获取的技术支持服务项目
+                -->
+                <section class="tab-pane"
+                         id="help"
+                         role="tabpanel"
+                         aria-labelledby="tab-help">
+                    <!--
+                        技术支持页面列出了平台提供的售后与运维保障服务，
+                        包括全天候在线支持、系统升级维护、数据安全保障
+                        以及用户培训等内容。
+                    -->
+                    <h2 class="content-title">技术支持</h2>
+                    <p class="content-text">我们提供专业的技术支持服务，确保系统稳定运行和用户操作顺畅。</p>
+                    <ul class="feature-list">
+                        <li>7×24小时在线支持</li>
+                        <li>系统维护与升级</li>
+                        <li>数据备份与恢复</li>
+                        <li>用户培训服务</li>
+                        <li>技术咨询与解答</li>
+                    </ul>
+                </section>
+
+                <!--
+                    关于我们内容窗格：
+                    - aria-labelledby="tab-about"：关联"关于我们"标签控件
+                    - 展示团队背景和核心竞争力
+                -->
+                <section class="tab-pane"
+                         id="about"
+                         role="tabpanel"
+                         aria-labelledby="tab-about">
+                    <!--
+                        关于我们页面介绍开发团队的专业背景、
+                        行业积累和服务理念，建立用户信任。
+                    -->
+                    <h2 class="content-title">关于我们</h2>
+                    <p class="content-text">我们是一支专业的图书管理系统开发团队，致力于为图书馆和图书管理机构提供优质的数字化解决方案。</p>
+                    <ul class="feature-list">
+                        <li>专业的开发团队</li>
+                        <li>丰富的行业经验</li>
+                        <li>优质的服务保障</li>
+                        <li>持续的技术创新</li>
+                    </ul>
+                </section>
+
+            </div><!-- /.tab-content -->
+        </div><!-- /.container-custom -->
+    </main>
+
+    <!--
+        页脚区域：使用 <footer> 语义元素，
+        作为页面内容后的附加信息区域。
+    -->
+    <footer role="contentinfo">
+        <!-- 页脚内容可根据需要补充，如版权信息等 -->
+    </footer>
+
+    <!--
+        JavaScript 依赖：
+        - jQuery 3.7.1：提供便捷的 DOM 操作和事件处理 API
+        - Bootstrap 4.6.2 Bundle：包含 Bootstrap 的 JS 组件（含 Popper.js），
+          其中 Tab 组件提供了 .tab('show') 方法用于程序化切换标签页
+    -->
+    <script src="js/jquery-3.7.1.min.js"></script>
+    <script src="bootstrap-4.6.2-dist/js/bootstrap.bundle.min.js"></script>
+
+    <!--
+        ============================================================
+        标签页切换逻辑（编程式方式 / Programmatic API）
+        ============================================================
+
+        与 8-6.html 的关键区别总结：
+        ┌────────────────────┬──────────────────────────┬──────────────────────────┐
+        │ 对比维度           │ 8-6.html                 │ 本文件 8-7.html          │
+        ├────────────────────┼──────────────────────────┼──────────────────────────┤
+        │ 切换方式           │ 声明式（data-toggle）    │ 编程式（.tab('show')）   │
+        │ 事件绑定           │ Bootstrap 自动处理       │ 手动通过 jQuery 绑定     │
+        │ JS 代码量          │ 无需手写 JS              │ 需要编写事件处理逻辑     │
+        │ 灵活性             │ 较低，仅支持基本切换     │ 较高，可插入自定义逻辑   │
+        │ 切换前拦截         │ 需额外监听事件           │ 可在 click 回调中直接处理│
+        │ 适用场景           │ 简单静态标签页           │ 需要动态控制/验证的场景  │
+        └────────────────────┴──────────────────────────┴──────────────────────────┘
+
+        具体流程说明：
+        1. 使用 jQuery 的 $(document).ready() 确保 DOM 完全加载后再绑定事件
+        2. 通过 $('.nav-link') 选择所有导航链接
+        3. 为每个链接绑定 click 事件处理函数
+        4. 在事件处理函数中：
+           a. e.preventDefault() —— 阻止 <a> 标签的默认锚点跳转行为，
+              避免页面 URL 出现 #index、#course 等哈希值
+           b. $(this).tab('show') —— 调用 Bootstrap Tab 组件的 show 方法，
+              该方法内部会：
+              - 移除当前激活标签的 .active 类和 aria-selected="true"
+              - 隐藏当前可见的 .tab-pane
+              - 为目标标签添加 .active 类和 aria-selected="true"
+              - 显示对应的 .tab-pane
+              - 触发 show.bs.tab / shown.bs.tab 等 Bootstrap 自定义事件
+
+        使用 const 声明变量（ES6+ 规范）：
+        此处因只需为已有 DOM 元素绑定事件，无需额外声明变量。
+        若需缓存 DOM 引用，应使用 const（不可重新赋值）而非 var（函数作用域、
+        存在变量提升等问题），以提升代码可读性和可维护性。
+    -->
+    <script>
+        // jQuery 入口：等待 DOM 完全就绪后执行
+        $(document).ready(function() {
+            // 为所有胶囊导航链接绑定点击事件
+            // 通过编程式方式调用 Bootstrap 的 .tab('show') API
+            // 相比 data-toggle 声明式方式，此处可在切换前插入任意自定义逻辑
+            $('.nav-link').on('click', function(e) {
+                // 阻止 <a> 标签的默认跳转行为（避免 URL 中出现 #hash）
+                e.preventDefault();
+                // 调用 Bootstrap Tab 组件的 show 方法，
+                // 完成激活类切换、面板显示/隐藏、aria-selected 更新等操作
+                $(this).tab('show');
+            });
+        });
+    </script>
+</body>
+</html>
